@@ -1,0 +1,89 @@
+# mtg-rival-pilot — partida de un BOT EXTERNO (seat `bot`, misma API HTTP que la mesa web, con timeout por decisión) contra el piloto o la IA de stock. Uso: bin/bot-game.sh
+# Uso: bin/bench.sh match config/pilot.yaml --seats glm,forge-ai-2 --decks <abs>/decks/a.dck,<abs>/decks/b.dck --matches N
+# Las keys NUNCA van acá: bin/bench.sh exporta MTG_LLM_KEY desde ~/.claude/secrets/op-llm-proxy.env.
+
+event:
+  name: pilotmesabot           # ojo: el harness aborta si el nombre del evento aparece en un prompt
+  cube: LSVCube   # cubo de Forge; sólo alimenta la base de conocimiento (tools), en match no se draftea
+  pods: 1
+  seed: 42
+  format: round-robin
+  rounds: 1
+  gamesPerMatch: 1            # bo1: cada "match" es una partida
+  packs: 3
+  packSize: 15
+  minDeckSize: 60
+  knowledge: oracle           # texto oracle inline de cada carta que aparece en la decisión; sin tools por ahora
+  damageMath: true          # parche piloto: sección "Damage math" (daño disponible, letal, combate entrante) calculada por el harness
+  cubeStudy: false
+  briefMaxWords: 600
+  briefScope: all
+  carryNotes: true
+  recordPrompts: true         # guarda cada prompt renderizado en runs/<id>/rendered-prompts.jsonl para revisar qué ve el modelo
+  promptVersion: v2
+  maxToolCallsPerDecision: 4
+  maxRetries: 3
+  decisionTimeoutSec: 240
+  maxGameTurns: 40
+  parallelMatches: 1
+  priorityStops: smart
+  manaPayment: smart
+
+engine:
+  type: forge
+  forgeDir: /Users/jorge/dev/mtg-rival-pilot/forge
+  bridgeJar: /Users/jorge/dev/mtg-rival-pilot/vendor/mtg-bench/bridge/build/mtg-bench-bridge-v2.jar   # bridge con --first (salir/robar forzado); el jar sin sufijo es el original
+  controller: human           # el path validado por mtg-bench: controlador humano de Forge manejado headless
+  java: /Users/jorge/Library/Java/JavaVirtualMachines/openjdk-19.0.2/Contents/Home/bin/java   # arm64 nativo (el JDK 24 de la Mac es x86 bajo Rosetta)
+  javaOpts: ["-Xmx3g"]
+  gameTimeoutSec: 14400           # 4 h por partida: una persona no juega a 4 min como el bot
+
+outputDir: /Users/jorge/dev/mtg-rival-pilot/runs
+
+pricing: {}
+
+seats:
+  - { id: forge-ai-1, provider: forge-ai }        # IA de stock de Forge (la misma vara que usa Grok)
+  - { id: forge-ai-2, provider: forge-ai }
+  - { id: rank-1, provider: rank-bot }            # bot greedy que juega A TRAVÉS del bridge: prueba todas las decisiones gratis
+  # ⚠️ el harness exige EXACTAMENTE 8 seats (pods × 8, herencia del draft): para sumar uno hay que sacar otro
+  - id: glm
+    provider: openai
+    model: glm-5.3
+    baseUrl: https://llm.ai.openpass.com.ar/v1
+    apiKeyEnv: MTG_LLM_KEY
+    label: "GLM 5.3 (proxy OpenPass)"
+    maxTokens: 8192
+    reasoningEffort: low      # sin esto razona >4096 tokens por decisión (74-146 s); con low: ~100 tokens, 5 s. El proxy sólo acepta low|high|max
+  - id: glm52
+    provider: openai
+    model: glm-5.2
+    baseUrl: https://llm.ai.openpass.com.ar/v1
+    apiKeyEnv: MTG_LLM_KEY
+    label: "GLM 5.2 (proxy OpenPass)"
+    maxTokens: 8192
+    reasoningEffort: low
+  - id: flash
+    provider: openai
+    model: deepseek-v4.1-flash
+    baseUrl: https://llm.ai.openpass.com.ar/v1
+    apiKeyEnv: MTG_LLM_KEY
+    label: "DeepSeek V4.1 Flash (proxy OpenPass)"
+    maxTokens: 8192           # razonamiento silencioso siempre activo (400-2700 tokens por decisión); el proxy exige >= 1024
+    temperature: 0.3          # ⚠️ sin reasoningEffort explota en decisiones de daño (Red Madness): 17-20k tokens, 200-240 s, timeouts (flash-red-x4: 4 forfeits)
+    fallbackReasoningEffort: none   # parche pilot (vendor/mtg-bench rama `pilot`): si se acaba el budget, re-pregunta UNA vez sin razonamiento en vez de pasar
+    fallbackTimeoutSec: 60
+  - id: flash-low
+    provider: openai
+    model: deepseek-v4.1-flash
+    baseUrl: https://llm.ai.openpass.com.ar/v1
+    apiKeyEnv: MTG_LLM_KEY
+    label: "DeepSeek V4.1 Flash low (proxy OpenPass)"
+    maxTokens: 8192
+    temperature: 0.3
+    reasoningEffort: low      # DeepSeek acepta low|none (GLM no acepta none). Probe 12/10: baseline 498 tokens de razonamiento, low 351, none 0
+  - id: bot
+    provider: human               # parche pilot: mismo asiento que la mesa web; un programa externo se conecta a la API (docs/API-BOT.md)
+    label: "Bot externo (API)"
+    decisionTimeoutSec: 90        # sin respuesta en 90 s: acción nula (pasar / no bloquear / primera opción) y la partida sigue
+    webPort: 8790                 # la mesa de la partida; el lobby público (bin/mesa.sh, puerto 8787) la proxya

@@ -1,0 +1,10 @@
+{
+  "name": "mtg-rival-pilot",
+  "private": true,
+  "type": "module",
+  "description": "Lobby + MCP del piloto mtg-rival (bin/mesa.mjs). El harness vive en vendor/mtg-bench con su propio package.json.",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.32.1",
+    "zod": "^3.25.0"
+  }
+}

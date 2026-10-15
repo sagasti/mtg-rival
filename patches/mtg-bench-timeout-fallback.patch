@@ -1,0 +1,137 @@
+diff --git a/src/agents/agent.ts b/src/agents/agent.ts
+index e69c352..11959db 100644
+--- a/src/agents/agent.ts
++++ b/src/agents/agent.ts
+@@ -17,6 +17,8 @@ export interface AgentResult {
+   infraError?: boolean;
+   /** The decision's time budget ran out (model time only; provider backoff excluded): the agent's failure. */
+   timedOut?: boolean;
++  /** Pilot patch: the first budget ran out and the answer came from the fast re-ask (seat.fallbackReasoningEffort). */
++  timeoutFallback?: boolean;
+   usage: TokenUsage;
+   modelCalls: number;
+   toolCalls: Record<string, number>;
+@@ -182,6 +184,7 @@ export class Seat {
+       valid: !fallback && !forfeit, invalidAttempts: result.invalidAttempts, fallback, forfeit, autoResolved: false, modelCalls: result.modelCalls,
+       toolCalls: result.toolCalls, latencyMs: Date.now() - t0, rationale: response.rationale, ...outcome(result, fallback || forfeit),
+       ...(result.deckReview ? { deckReview: result.deckReview } : {}),
++      ...(result.timeoutFallback ? { timeoutFallback: true } : {}),
+     });
+     return response;
+   }
+diff --git a/src/agents/llm.ts b/src/agents/llm.ts
+index 963976d..ee46f44 100644
+--- a/src/agents/llm.ts
++++ b/src/agents/llm.ts
+@@ -76,11 +76,11 @@ export class LlmAgent implements DecisionAgent {
+    * cut off by the output cap is recorded as truncated and asked again once with a bigger cap; every answer is checked
+    * against the seat's spec. Throws when the provider keeps failing or the clock runs out.
+    */
+-  async call(args: Pick<CompleteArgs, "system" | "messages" | "tools" | "debug">, clock: DecisionClock, round: number, onCall: CallObserver): Promise<CallOutcome> {
++  async call(args: Pick<CompleteArgs, "system" | "messages" | "tools" | "debug" | "reasoningEffort" | "maxTokens">, clock: DecisionClock, round: number, onCall: CallObserver): Promise<CallOutcome> {
+     let usage: TokenUsage = { ...ZERO_USAGE };
+     let calls = 0, truncated = 0;
+     let specViolation: string | undefined;
+-    let maxTokens: number | undefined;
++    let maxTokens: number | undefined = args.maxTokens;
+     for (;;) {
+       const t0 = Date.now();
+       let turn: ModelTurn;
+@@ -139,7 +139,9 @@ export class LlmAgent implements DecisionAgent {
+       proposals.push({ response: resp, key: deckKey(resp.choice, resp.basics), cards: stats.cards, lands: stats.lands });
+       return stats;
+     };
++    let fellBack = false;
+     const result = (response: DecisionResponse | null, extra: Partial<AgentResult> = {}): AgentResult => {
++      if (fellBack) extra = { timeoutFallback: true, ...extra };
+       // A failure after a valid proposal (invalid answers, the clock, the provider): that proposal is the agent's deck;
+       // the failure is kept on the review record.
+       if (!response && proposals.length) {
+@@ -181,8 +183,19 @@ export class LlmAgent implements DecisionAgent {
+     try {
+       for (let round = 0; round < maxRounds; round++) {
+         let out;
+-        try { out = await this.call({ system, messages, tools, debug }, clock, round, onCall); }
+-        catch (e: any) { return result(null, failure(e, clock)); }
++        const fast = fellBack ? { reasoningEffort: this.seat.fallbackReasoningEffort, maxTokens: 4096 } : {};
++        try { out = await this.call({ system, messages, tools, debug, ...fast }, clock, round, onCall); }
++        catch (e: any) {
++          // Pilot patch: one fast re-ask (reasoning off) under a fresh short budget instead of the null action.
++          if (clock.expired && this.seat.fallbackReasoningEffort && !fellBack && req.kind !== "deckbuild") {
++            fellBack = true;
++            clock.stop();
++            clock = new DecisionClock((this.seat.fallbackTimeoutSec ?? 60) * 1000);
++            messages.push({ role: "user", content: "Your time budget for this decision ran out. Answer NOW: call submit_decision with your best option ids. No further analysis." });
++            continue;
++          }
++          return result(null, failure(e, clock));
++        }
+         modelCalls += out.calls; usage = addUsage(usage, out.usage); truncated += out.truncated; specViolation ??= out.specViolation;
+         const turn = out.turn;
+         messages.push({ role: "assistant", text: turn.text, toolCalls: turn.toolCalls, raw: turn.raw });
+diff --git a/src/agents/providers/openai.ts b/src/agents/providers/openai.ts
+index 77ee1ea..93c7aba 100644
+--- a/src/agents/providers/openai.ts
++++ b/src/agents/providers/openai.ts
+@@ -38,7 +38,7 @@ export class OpenAIProvider implements Provider {
+     return { ...body, provider: { ...(body.provider ?? {}), order: [this.seat.backupProviders![i - 1]], allow_fallbacks: false } };
+   }
+ 
+-  async complete({ system, messages, tools, signal, clock, onRetry, maxTokens: cap }: CompleteArgs): Promise<ModelTurn> {
++  async complete({ system, messages, tools, signal, clock, onRetry, maxTokens: cap, reasoningEffort }: CompleteArgs): Promise<ModelTurn> {
+     const msgs: any[] = [{ role: "system", content: system }];
+     for (const m of messages) {
+       if (m.role === "user") msgs.push({ role: "user", content: m.content });
+@@ -62,7 +62,8 @@ export class OpenAIProvider implements Provider {
+     const maxTokens = cap ?? maxTokensFor(this.seat);
+     if (this.seat.provider === "openai") body.max_completion_tokens = maxTokens; else body.max_tokens = maxTokens;
+     if (this.seat.temperature !== undefined) body.temperature = this.seat.temperature;
+-    if (this.seat.reasoningEffort) body.reasoning_effort = this.seat.reasoningEffort;
++    const effort = reasoningEffort ?? this.seat.reasoningEffort;
++    if (effort) body.reasoning_effort = effort;
+     if (this.seat.provider === "openrouter") body.usage = { include: true };
+     Object.assign(body, this.seat.extraBody ?? {});
+ 
+diff --git a/src/agents/providers/types.ts b/src/agents/providers/types.ts
+index 3d19692..4f38529 100644
+--- a/src/agents/providers/types.ts
++++ b/src/agents/providers/types.ts
+@@ -36,6 +36,8 @@ export interface CompleteArgs {
+   onRetry?: (r: RetryInfo) => void;
+   /** Overrides the seat's output cap for this call (a retry after a truncated answer). */
+   maxTokens?: number;
++  /** Overrides the seat's reasoning effort for this call (pilot patch: the fast answer after a timeout). */
++  reasoningEffort?: string;
+   /** Offline providers (echo) may peek at the request; real providers must ignore it. */
+   debug?: { optionIds: string[]; min: number; max: number; kind: string; proposal?: number };
+ }
+diff --git a/src/analytics/recorder.ts b/src/analytics/recorder.ts
+index 38fe7fb..2e5a09f 100644
+--- a/src/analytics/recorder.ts
++++ b/src/analytics/recorder.ts
+@@ -97,6 +97,7 @@ export interface DecisionRecord extends TokenUsage {
+   error?: string;            // why the decision failed (forfeit, fallback, timeout, infrastructure)
+   infraError?: boolean;      // the provider kept failing; the match was abandoned after this row
+   timedOut?: boolean;        // the decision's time budget ran out (a forfeit, or a fallback in deckbuilding)
++  timeoutFallback?: boolean; // pilot patch: first budget ran out, answer came from the fast reasoning-off re-ask
+   truncated?: number;        // model calls stopped by the output cap
+   specViolation?: string;    // first breach of the seat's reasoning/host spec
+   /** Two-step deckbuilding (prompts v3): cards and lands of each proposal, whether the last was confirmed, why it stopped early. */
+diff --git a/src/config.ts b/src/config.ts
+index 3de7fb9..a9a02ab 100644
+--- a/src/config.ts
++++ b/src/config.ts
+@@ -32,6 +32,13 @@ export interface SeatConfig {
+   thinkingBudget?: number;
+   /** OpenAI-style reasoning effort ("low" | "medium" | "high"). */
+   reasoningEffort?: string;
++  /**
++   * Pilot patch: when a decision's time budget runs out, instead of forfeiting the agent is asked once more with this
++   * reasoning effort (e.g. "none") under a fresh budget of fallbackTimeoutSec (default 60). The decision is recorded
++   * with `timeoutFallback: true`.
++   */
++  fallbackReasoningEffort?: string;
++  fallbackTimeoutSec?: number;
+   /** Extra JSON merged into every request body (provider-specific knobs). */
+   extraBody?: Record<string, unknown>;
+   headers?: Record<string, string>;

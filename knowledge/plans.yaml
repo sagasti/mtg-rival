@@ -1,0 +1,231 @@
+# Planes de cruce para el piloto (parche: vendor/mtg-bench/src/knowledge/plans.ts, event.plansFile).
+# El harness reconoce el mazo propio por las cartas firma vistas en mano/mesa/cementerio y el del rival por lo que mostró
+# (mesa, cementerio, pila, registro). "ours|theirs" o "ours|*" cuando todavía no se sabe. Texto en inglés: es lo que lee el modelo.
+# Escrito por Claudio 15/10/2026 a partir del diagnóstico de 132 partidas (dejó resolver Flamebreather, Cloak, Priest; keeps de 1 tierra).
+archetypes:
+  red-madness:
+    name: Mono Red Madness
+    signature: [Kessig Flamebreather, Guttersnipe, Voldaren Epicure, Sneaky Snacker, Fiery Temper, Fireblast, Lava Dart, Lightning Bolt, Highway Robbery, Grab the Prize, Faithless Looting, Sazacap's Brew, Mountain]
+  bogles:
+    name: Bogles
+    signature: [Slippery Bogle, Gladecover Scout, Silhana Ledgewalker, Ancestral Mask, Armadillo Cloak, Ethereal Armor, Rancor, Utopia Sprawl, Abundant Growth, Malevolent Rumble, Cartouche of Solidarity, Kruphix's Insight, Sentinel's Eyes, Lifelink]
+  elves:
+    name: Elves
+    signature: [Llanowar Elves, Fyndhorn Elves, Elvish Mystic, Priest of Titania, Timberwatch Elf, Quirion Ranger, Elvish Vanguard, Nyxborn Hydra, Masked Vandal, Lead the Stampede, Winding Way, Land Grant, Generous Ent, Avenging Hunter, Sagu Wildling]
+  blue-terror:
+    name: Mono Blue Terror
+    signature: [Tolarian Terror, Cryptic Serpent, Delver of Secrets, Insectile Aberration, Mental Note, Thought Scour, Sleep of the Dead, Deem Inferior, Force Spike, Deep Analysis]
+  grixis-control:
+    name: Grixis Control
+    signature: [Baleful Strix, Murmuring Mystic, Thorn of the Black Rose, Snuff Out, Cast Down, Cut Down, Plunder the Trollshaws, Campfire, Extract a Confession, Suffocating Fumes, Lose Focus, Contaminated Aquifer, Dimir Aqueduct, Bojuka Bog, Seething Landscape, Volatile Fjord, Preordain, Swamp]
+  azorius-faeries:
+    name: Azorius Faeries
+    signature: [Spellstutter Sprite, Faerie Seer, Moon-Circuit Hacker, Kor Skyfisher, Novice Inspector, Thraben Inspector, Thraben Charm, Dispatch, Cryogen Relic, Sewer-veillance Cam, "Leonardo, Big Brother", Ancient Den, Seat of the Synod, Razortide Bridge, Idyllic Beachfront, Snow-Covered Plains, Faerie Guidemother, Of One Mind, Palace Sentinels]
+
+plans:
+  # ---------------------------------------------------------------- Mono Red Madness
+  "red-madness|*": >-
+    You are the aggro deck: every point of damage counts. Curve a creature on turns 1-3 (Epicure, Snacker, Flamebreather,
+    Guttersnipe), then point burn at the face unless a creature blocks your race or is an engine. Looting, Highway
+    Robbery and Grab the Prize are discard outlets: discard Fiery Temper to them for its madness cost. Fireblast
+    (sacrifice two Mountains) is the finisher: count lethal every turn with the damage-math section and do not fire it
+    early. Sacrifice Mountains (Fireblast, Lava Dart flashback) only for lethal; otherwise keep the lands for Looting
+    flashback and double-spell turns. Do not discard your last land to a Blood token or Looting unless you have 4 lands
+    in play. Keep 2-4 Mountains with cheap spells; one-land hands are a mulligan. Watch what the opponent plays and adapt.
+  "red-madness|bogles": >-
+    Race, but with one exception: their creatures have hexproof, their Eldrazi Spawn tokens (Malevolent Rumble) do not.
+    Hold Lava Dart (and its flashback) and Flamebreather pings for the Spawn token or a freshly cast 1/1 and, best of
+    all, kill the target IN RESPONSE to Rancor, Ethereal Armor or Armadillo Cloak so the aura fizzles: that is a
+    two-for-one and the only interaction you have. Everything else goes face: deploy creatures, attack every turn,
+    Bolt and Temper the face, Fireblast for lethal. Once Armadillo Cloak sticks the race turns (lifelink + trample):
+    keep drawing with Looting and Grab the Prize, build a lethal turn with Guttersnipe or Flamebreather triggers, and
+    chump the enchanted creature only when it buys the turn you need. Never sacrifice a Mountain (Dart flashback,
+    Fireblast) unless the damage-math section says it is lethal this turn: the lands pay for Looting flashback and the
+    big Guttersnipe turn later.
+  "red-madness|elves": >-
+    Kill the mana engines on sight: Priest of Titania, Timberwatch Elf and Quirion Ranger die to Lava Dart, Bolt or a
+    Flamebreather trigger; Timberwatch pumps make any unblocked elf lethal, so it is the first target. Lava Dart's
+    flashback and Guttersnipe/Flamebreather triggers sweep 1-toughness elves: use them when they go wide. After the
+    board is clear, race; chump-block a pumped attacker only when the damage-math section shows you would die.
+  "red-madness|blue-terror": >-
+    They have 9-10 counters and big bodies. Bait: cast the cheaper spell first and the one that matters when they are
+    tapped out; end-of-turn Fireblast or Bolt when their Islands are tapped. Kill Delver of Secrets at once (it is 1/1
+    until it flips). Terror and Serpent (5 toughness) are out of burn range: do not spend burn on them, race them and
+    chump when needed. Flamebreather and Guttersnipe win long games against their counters: resolve them when the
+    opponent is tapped low. Never walk Fireblast into open Counterspell mana if a smaller burn spell does the job.
+  "red-madness|grixis-control": >-
+    They answer creatures one for one (Snuff Out, Cast Down, Cut Down) and counter spells, then grind with Baleful
+    Strix, monarch (Thorn of the Black Rose) and Mystic tokens. Overload them with cheap threats, keep burn for the
+    face, and play two spells a turn when you can. Snuff Out costs them 4 life: that is damage for you. Attack to take
+    the monarch whenever Thorn lands; kill Murmuring Mystic before it makes birds. Do not overextend into Suffocating
+    Fumes (-1/-1 to your creatures): two creatures on board is enough. Fireblast at the end of their turn when tapped.
+  "red-madness|azorius-faeries": >-
+    Spellstutter Sprite counters a spell whose mana value is at most their number of Faeries: your one- and two-mana
+    spells are exposed while a Faerie is on board, so kill Sprites and Seers with Lava Dart or Flamebreather pings and
+    cast important spells when they are tapped out. Skyfisher and Sprite block on the ground: go wide and burn the
+    blockers only if it opens lethal. Thraben Charm kills an attacking creature, Dispatch taps or exiles one: expect
+    them, do not rely on a single big attacker. Race: their clock is slow fliers, yours is faster if you keep burning.
+
+  # ---------------------------------------------------------------- Bogles
+  "bogles|*": >-
+    You are the aura deck: one hexproof creature (Bogle, Scout, Ledgewalker) wearing auras wins. Turn 1-2 creature,
+    then stack auras in the order the matchup needs: Ethereal Armor (first strike, grows with every enchantment),
+    Rancor (trample, returns to hand if it goes to the graveyard), Ancestral Mask (+2/+2 per other enchantment),
+    Armadillo Cloak (trample and lifelink: the card that wins races). Utopia Sprawl and Abundant Growth are ramp AND
+    enchantments for Mask/Armor counts. Keep a second creature in hand against edicts and sweepers. Malevolent Rumble
+    digs for a creature. Keep hands with 2 lands plus a creature and an aura; one-landers are mulligans.
+  "bogles|red-madness": >-
+    Their burn cannot target your hexproof creature. The only risk is the turn the creature is cast naked: Lava Dart
+    or a Flamebreather ping kills a 1/1, so cast the creature when they have little mana or accept the risk early.
+    Armadillo Cloak first: lifelink wins the race on its own. Ethereal Armor gives first strike to block Flamebreather
+    and Guttersnipe profitably. Do not play around sweepers they do not have; just build the biggest lifelinker fast.
+  "bogles|elves": >-
+    They go wide and chump forever, so you need trample: Rancor and Armadillo Cloak first, then size. Lifelink keeps you
+    ahead of their swarm. Beware Masked Vandal: its enter-the-battlefield effect can exile one of your auras (it targets
+    the aura, not the hexproof creature), so spread auras over two creatures when you can. Timberwatch Elf pumps make
+    their attackers huge after blocks: keep a chump blocker or race faster.
+  "bogles|blue-terror": >-
+    They counter creatures and auras and race with 5/5s. Bait: play a cheap aura first, cast the one that matters when
+    they are tapped out; Spell Pierce taxes an aura by 2, so keep two extra mana up. Sleep of the Dead cannot target
+    your hexproof creature. In combat Ethereal Armor (first strike) and Cloak (lifelink) let one creature beat Terror
+    or Serpent; Rancor's trample makes chump blocks useless. Counter nothing yourself: you have no interaction, so go
+    fast and do not hold back creatures: an extra Bogle after the first resolves is fine.
+  "bogles|grixis-control": >-
+    Snuff Out, Cast Down and Cut Down cannot target hexproof. Their real answers: Suffocating Fumes (-1/-1: a naked
+    Bogle dies), Extract a Confession (edict: keep a second creature so you sacrifice the spare), Baleful Strix and
+    Thorn (deathtouch blockers: Ethereal Armor's first strike kills them before they deal damage, so Armor first),
+    and Counterspell on your creatures. Resolve the creature when they tap out, give it Armor before attacking into
+    deathtouch, keep two creatures on board, attack to take the monarch when Thorn lands.
+  "bogles|azorius-faeries": >-
+    Spellstutter Sprite counters your cheap creatures and auras while a Faerie is on board: cast them when the Sprite
+    count is low or they are tapped. Dispatch cannot target hexproof, but Thraben Charm can destroy one aura: spread
+    auras across two creatures and keep Rancor (it comes back). Their fliers chump: Rancor and Cloak give trample.
+    Race with lifelink; they are a slow clock.
+
+  # ---------------------------------------------------------------- Elves
+  "elves|*": >-
+    You are the swarm. Mana elf turn 1, Priest of Titania (one mana per Elf on both sides) and Timberwatch Elf next,
+    Quirion Ranger untaps Priest for double mana, then dump the hand: Elvish Vanguard grows, Nyxborn Hydra is the
+    mana sink (big X), Lead the Stampede and Winding Way refill. Timberwatch's tap pump on an unblocked attacker is
+    the usual lethal: the damage-math section counts it. Keep one-land hands only with a mana elf or Land Grant and
+    cheap plays; the deck has only 11 Forests plus Land Grant and Generous Ent.
+  "elves|red-madness": >-
+    They kill 1-toughness elves with Lava Dart (and its flashback), Bolt and Flamebreather pings, and sweep with
+    Guttersnipe triggers. Do not dump every elf before their sweep turn: keep Lead the Stampede to rebuild. Elvish
+    Vanguard and Nyxborn Hydra outgrow their burn; prioritise them. Priest and Timberwatch are their targets, play
+    them when you can use them the same turn. Race hard: they cannot block well, and a Timberwatch pump on the
+    unblocked elf closes games.
+  "elves|bogles": >-
+    Race. Their one enchanted hexproof creature with lifelink and trample beats any single blocker, so do not block with
+    one elf: either chump with several when the damage-math section says you die, or ignore it and swing wide with
+    Timberwatch pumps. Masked Vandal: exile a creature from your graveyard to exile their Armadillo Cloak or Ancestral
+    Mask (it targets the aura, which has no hexproof). Nyxborn Hydra with big X plus pumps ends it in two swings.
+  "elves|blue-terror": >-
+    They counter and race with 5/5s. Overload the counters: two cheap spells a turn, bait with a lesser creature before
+    the one you need (Priest, Hydra, Lead the Stampede). Their big creatures cannot block a wide board: attack with
+    everything but the elves you need for mana, and pump the unblocked one with Timberwatch after blockers are declared.
+    Sleep of the Dead taps a creature; keep a second pumper. Do not walk a big Hydra into open Counterspell mana.
+  "elves|grixis-control": >-
+    Suffocating Fumes (-1/-1 to your creatures) is the sweeper: keep three or four elves on board and the rest in hand,
+    Vanguard and Hydra survive it. They kill Priest and Timberwatch on sight: play them when they do something that
+    turn. Baleful Strix and Thorn have deathtouch, so attack wide, not with one pumped elf into a blocker. Take the
+    monarch from Thorn by connecting with any attacker. Counter nothing: just rebuild with Lead the Stampede.
+  "elves|azorius-faeries": >-
+    Spellstutter Sprite counters your one- and two-mana spells while Faeries are on board: cast elves when they are
+    tapped out or in pairs. Their fliers chump and Thraben Charm kills one attacker, Dispatch taps one: go wide and pump
+    a different attacker than the obvious one. Their clock is slow: build the board, then alpha strike with Timberwatch.
+
+  # ---------------------------------------------------------------- Mono Blue Terror
+  "blue-terror|*": >-
+    You are tempo-control: cantrips (Brainstorm, Ponder, Thought Scour, Mental Note, Lórien Revealed) fill the graveyard
+    so Tolarian Terror and Cryptic Serpent cost one or two mana, then one fat body plus counters wins. Delver turn 1 when
+    you have it. Use Force Spike and Spell Pierce early, Counterspell for the spell that would beat you (not the first
+    thing they cast), Dispel for their removal or burn aimed at your threat. Keep Island + two cantrips at worst; a
+    one-land hand without two cantrips is a mulligan (16 Islands). Do not tap out for a Terror when a counter would
+    decide the game next turn.
+  "blue-terror|red-madness": >-
+    Counter Kessig Flamebreather and Guttersnipe (their long-game engines) and Fireblast; Dispel or Spell Pierce the burn
+    aimed at Delver if it matters, otherwise let Delver trade. Lava Dart, Looting and Grab the Prize are not worth a
+    counter. Land Terror or Serpent early: 5 toughness is out of burn range and they cannot block it, then race. Keep
+    your life above 7 (Fireblast 4 + Bolt 3): below that hold Counterspell for any burn at your face.
+  "blue-terror|bogles": >-
+    Counter the CREATURES (Slippery Bogle, Gladecover Scout, Silhana Ledgewalker: only 11 in the deck); hexproof stops
+    removal and Sleep of the Dead but not counterspells. If a creature resolves, counter Armadillo Cloak and Ancestral
+    Mask on sight, they are the auras that beat you; Rancor and Ethereal Armor are worth a counter when you have spare
+    mana. Deem Inferior targets a spell, not the creature. Race with Terror and Serpent: 5/5 and 6/5 beat a lightly
+    enchanted creature in combat, chump with Delver only against lethal.
+  "blue-terror|elves": >-
+    Counter Priest of Titania, Timberwatch Elf, Lead the Stampede and a big Nyxborn Hydra; let single mana elves resolve.
+    Your 5/5 and 6/5 block all day: they cannot attack into them without Timberwatch pumps, so keep blockers back and
+    do not race recklessly. Sleep of the Dead on Timberwatch Elf keeps it tapped. Win with evasive Delver damage and
+    counters on their refills, then swing when they are out of gas.
+  "blue-terror|grixis-control": >-
+    Control mirror: card advantage and timing. Snuff Out (free) and Cast Down kill Terror or Serpent, Cut Down only Delver.
+    They are instants: hold Dispel to protect your resolved threat, and cast the threat when they are tapped out or
+    after baiting a counter with a Serpent or a cantrip. Counter Thorn of the Black Rose and Murmuring Mystic (their
+    engines) and Plunder the Trollshaws when you can; take the monarch back by attacking. Baleful Strix blocks a fatty
+    forever: get two threats or fly over with Delver.
+  "blue-terror|azorius-faeries": >-
+    Spellstutter Sprite counters spells with mana value up to their Faerie count: your cantrips and Delver, not Terror
+    (mana value 5) nor Serpent (7). So land the fatties and protect them: Dispatch (exile with three artifacts) and
+    Thraben Charm are their answers, Dispel counters both. Counterspell for Skyfisher or Sprite only when it saves your
+    threat or tempo. Their fliers are small: Terror and Serpent wall the ground and race; keep life out of ninja
+    chip range.
+
+  # ---------------------------------------------------------------- Grixis Control
+  "grixis-control|*": >-
+    You are the control deck. Trade one for one: Snuff Out (free, pay 4 life, nonblack creature), Cast Down, Cut Down on
+    small creatures, Counterspell and Spell Pierce for what matters. Preordain, Lórien Revealed and Plunder the Trollshaws
+    find lands and answers. Baleful Strix blocks anything (flying deathtouch) and draws. Thorn of the Black Rose makes
+    you the monarch: keep it only if you can stop attackers. Murmuring Mystic turns every cantrip into a flier and wins
+    late. Campfire gains life and recycles. Keep hands with 3 lands, removal and a cantrip; two-landers with cantrips
+    are fine on the draw.
+  "grixis-control|red-madness": >-
+    Life is the resource: avoid Snuff Out's 4 life unless it saves more. Cast Down or Cut Down Kessig Flamebreather and
+    Guttersnipe at once, counter Fireblast and Guttersnipe, let Lava Dart and Looting resolve. Strix and Thorn block
+    their creatures profitably. Campfire's lifegain matters here. Stay above 7 life (Fireblast + Bolt) with a counter up.
+  "grixis-control|bogles": >-
+    Hexproof blanks Snuff Out, Cast Down and Cut Down. Counter the creature spells (Bogle, Scout, Ledgewalker: 11 in the
+    deck) above all. Suffocating Fumes kills a naked 1/1 before it is enchanted; Extract a Confession makes them sacrifice
+    when they have one creature: hold it for that moment. Baleful Strix and Thorn kill an attacker with deathtouch unless
+    it has first strike (Ethereal Armor): block when it does not. Mystic birds chump the lifelinker while you find the edict.
+  "grixis-control|elves": >-
+    Suffocating Fumes is the sweeper: wait for three or more 1-toughness elves. Kill Priest of Titania and Timberwatch Elf
+    on sight, counter Lead the Stampede, Winding Way and a big Nyxborn Hydra. Strix and Thorn deathtouch stop single big
+    attackers; a wide alpha strike with pumps is the danger, so keep Fumes or a blocker count. Win late with Mystic.
+  "grixis-control|blue-terror": >-
+    Cut Down kills only Delver (power + toughness 5 or less). Snuff Out and Cast Down kill Terror and Serpent: expect
+    Dispel or Counterspell, so bait with Strix or a cantrip, or remove at the end of their turn when they are tapped.
+    Counter the fatties on cast when you can. Strix blocks a 5/5 forever. Thorn's monarch forces them to attack into
+    deathtouch. Grind: Plunder and Mystic out-card them.
+  "grixis-control|azorius-faeries": >-
+    Suffocating Fumes kills Sprite, Seer and Hacker (-1/-1). Spellstutter Sprite counters your cheap removal while
+    Faeries are out: cast removal when they are tapped or on bigger targets. Dispatch taps or exiles your Strix: keep
+    two blockers. They take the monarch with fliers: play Thorn only when the air is safe. Kill Kor Skyfisher and
+    Sprite before they chip you to death with ninjutsu draws.
+
+  # ---------------------------------------------------------------- Azorius Faeries
+  "azorius-faeries|*": >-
+    You are tempo with flash: Spellstutter Sprite at the end of their turn or in response (counters a spell with mana
+    value up to your Faerie count), Faerie Seer scries, Moon-Circuit Hacker ninjutsus in for cards, Kor Skyfisher
+    re-buys an Inspector (clue) or a land. Dispatch taps a creature, or exiles it with three artifacts (artifact lands,
+    Cryogen Relic). Counterspell for the real threats, Thraben Charm kills an attacking or blocking creature. Win by
+    chip damage in the air while answering what matters. Keep two lands with cheap plays.
+  "azorius-faeries|red-madness": >-
+    Sprite counters Bolt, Dart, Temper and their two-drops. Skyfisher blocks Snacker and Epicure; Thraben Charm kills
+    Flamebreather or Guttersnipe when it attacks; Dispatch taps a would-be attacker. Counter Fireblast and Guttersnipe,
+    let Looting and Lava Dart resolve. Race in the air with ninja draws, keep life above 7.
+  "azorius-faeries|bogles": >-
+    Counter the creature spells (hexproof does not stop a counter) with Sprite or Counterspell. If one resolves, Thraben
+    Charm destroys an aura (Armadillo Cloak first) and Dispatch cannot target it. Chump with Faeries only against lethal,
+    race in the air.
+  "azorius-faeries|elves": >-
+    Sprite counters mana elves, Timberwatch and Priest; Thraben Charm kills a pumped attacker (damage equals your creature
+    count); Dispatch taps Priest or Timberwatch. Counter Lead the Stampede and a big Hydra. Fliers race over the swarm.
+  "azorius-faeries|blue-terror": >-
+    Sprite cannot counter Terror or Serpent (mana value 5 and 7): save Counterspell for them, or Dispatch-exile them with
+    three artifacts. Sprite counters their cantrips and Delver. Thraben Charm kills an attacking Delver. Race in the air.
+  "azorius-faeries|grixis-control": >-
+    Grind: Inspectors' clues and Skyfisher re-buys out-card them. Sprite counters Cut Down and Cast Down; Snuff Out (mana
+    value 4) needs Counterspell. Don't overextend into Suffocating Fumes. Take the monarch with fliers when Thorn lands.
+    Dispatch their Strix or Mystic.

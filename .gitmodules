@@ -1,0 +1,4 @@
+[submodule "vendor/mtg-bench"]
+	path = vendor/mtg-bench
+	url = https://github.com/sagasti/mtg-bench.git
+	branch = pilot

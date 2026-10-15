@@ -1,0 +1,14 @@
+forge/
+forge-dl/
+forge-user/
+forge-cache/
+vendor/mtg-bench/node_modules/
+vendor/mtg-bench/bridge/build/
+vendor/mtg-bench/data/cards.json
+runs/
+.env
+*.log
+data/mesa/
+node_modules/
+.DS_Store
+decks/visitantes/
