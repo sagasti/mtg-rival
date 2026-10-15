@@ -10,6 +10,8 @@ if [[ -f "$HOME/.claude/secrets/op-llm-proxy.env" ]]; then
   set -a; source "$HOME/.claude/secrets/op-llm-proxy.env"; set +a
   export MTG_LLM_KEY="${MTG_LLM_KEY:-${BHUB_MCP_LLM_KEY:-}}"
 fi
+# Endpoint del proxy LLM: los yaml dicen ${MTG_LLM_BASE_URL} y el harness lo expande; acá se deriva de OP_LLM_PROXY_URL del env de secrets.
+export MTG_LLM_BASE_URL="${MTG_LLM_BASE_URL:-${OP_LLM_PROXY_URL:-}}"
 seed=""; alternate=""; args=()
 while (($#)); do
   case "$1" in

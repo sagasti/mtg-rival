@@ -13,7 +13,7 @@ import { fileURLToPath } from "node:url";
 
 export const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 export const DATA = path.join(root, "data", "mesa");
-export const RIVALES = { "red-madness": "Mono Red Madness", bogles: "Bogles", elves: "Elves", "blue-terror": "Mono Blue Terror", "grixis-control": "Grixis Control (lista de Emi)", "azorius-faeries": "Azorius Faeries (lista de Emi)" };
+export const RIVALES = { "red-madness": "Mono Red Madness", bogles: "Bogles", elves: "Elves", "blue-terror": "Mono Blue Terror", "grixis-control": "Grixis Control", "azorius-faeries": "Azorius Faeries" };
 export const SEATS = { glm: "el piloto (GLM 5.3 + damage math)", flash: "el piloto caro (DeepSeek Flash razonando)", "forge-ai-1": "la IA de stock de Forge" };
 
 // --- cartas -------------------------------------------------------------------------------------------------------

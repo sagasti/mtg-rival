@@ -12,3 +12,5 @@ data/mesa/
 node_modules/
 .DS_Store
 decks/visitantes/
+CLAUDE.local.md
+docs/PENDIENTES-HISTORICO.md

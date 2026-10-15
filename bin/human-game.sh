@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Una persona juega desde el navegador contra el piloto (seat glm por default) o contra la IA de stock (forge-ai-1).
 # Uso: bin/human-game.sh <mazo-humano.dck> <mazo-rival.dck> [run-id] [seat-rival=glm] [--seed N]
-#   ej: bin/human-game.sh decks/pauper-elves.dck decks/pauper-red-madness.dck emi-1
+#   ej: bin/human-game.sh decks/pauper-elves.dck decks/pauper-red-madness.dck visita-1
 # Imprime el link (http://localhost:8787/?t=<token>); para alguien remoto, exponer el puerto con un túnel (cloudflared/ngrok).
 set -euo pipefail
 root="$(cd "$(dirname "$0")/.." && pwd)"

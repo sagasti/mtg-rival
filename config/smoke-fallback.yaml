@@ -49,25 +49,25 @@ seats:
   - id: glm
     provider: openai
     model: glm-5.3
-    baseUrl: https://llm.ai.openpass.com.ar/v1
+    baseUrl: ${MTG_LLM_BASE_URL}   # endpoint OpenAI-compatible; viene del entorno (bin/bench.sh lo exporta), nunca del repo
     apiKeyEnv: MTG_LLM_KEY
-    label: "GLM 5.3 (proxy OpenPass)"
+    label: "GLM 5.3 (proxy LLM)"
     maxTokens: 8192
     reasoningEffort: low      # sin esto razona >4096 tokens por decisión (74-146 s); con low: ~100 tokens, 5 s. El proxy sólo acepta low|high|max
   - id: glm52
     provider: openai
     model: glm-5.2
-    baseUrl: https://llm.ai.openpass.com.ar/v1
+    baseUrl: ${MTG_LLM_BASE_URL}   # endpoint OpenAI-compatible; viene del entorno (bin/bench.sh lo exporta), nunca del repo
     apiKeyEnv: MTG_LLM_KEY
-    label: "GLM 5.2 (proxy OpenPass)"
+    label: "GLM 5.2 (proxy LLM)"
     maxTokens: 8192
     reasoningEffort: low
   - id: flash
     provider: openai
     model: deepseek-v4.1-flash
-    baseUrl: https://llm.ai.openpass.com.ar/v1
+    baseUrl: ${MTG_LLM_BASE_URL}   # endpoint OpenAI-compatible; viene del entorno (bin/bench.sh lo exporta), nunca del repo
     apiKeyEnv: MTG_LLM_KEY
-    label: "DeepSeek V4.1 Flash (proxy OpenPass)"
+    label: "DeepSeek V4.1 Flash (proxy LLM)"
     maxTokens: 8192           # razonamiento silencioso siempre activo (400-2700 tokens por decisión); el proxy exige >= 1024
     temperature: 0.3          # ⚠️ sin reasoningEffort explota en decisiones de daño (Red Madness): 17-20k tokens, 200-240 s, timeouts (flash-red-x4: 4 forfeits)
     fallbackReasoningEffort: none   # parche pilot (vendor/mtg-bench rama `pilot`): si se acaba el budget, re-pregunta UNA vez sin razonamiento en vez de pasar
@@ -75,18 +75,18 @@ seats:
   - id: flash-low
     provider: openai
     model: deepseek-v4.1-flash
-    baseUrl: https://llm.ai.openpass.com.ar/v1
+    baseUrl: ${MTG_LLM_BASE_URL}   # endpoint OpenAI-compatible; viene del entorno (bin/bench.sh lo exporta), nunca del repo
     apiKeyEnv: MTG_LLM_KEY
-    label: "DeepSeek V4.1 Flash low (proxy OpenPass)"
+    label: "DeepSeek V4.1 Flash low (proxy LLM)"
     maxTokens: 8192
     temperature: 0.3
     reasoningEffort: low      # DeepSeek acepta low|none (GLM no acepta none). Probe 12/10: baseline 498 tokens de razonamiento, low 351, none 0
   - id: flash-none
     provider: openai
     model: deepseek-v4.1-flash
-    baseUrl: https://llm.ai.openpass.com.ar/v1
+    baseUrl: ${MTG_LLM_BASE_URL}   # endpoint OpenAI-compatible; viene del entorno (bin/bench.sh lo exporta), nunca del repo
     apiKeyEnv: MTG_LLM_KEY
-    label: "DeepSeek V4.1 Flash sin razonamiento (proxy OpenPass)"
+    label: "DeepSeek V4.1 Flash sin razonamiento (proxy LLM)"
     maxTokens: 8192
     temperature: 0.3
     reasoningEffort: none     # 0 tokens de razonamiento, 41 de salida en el probe; respuesta correcta pero línea de juego equivocada
