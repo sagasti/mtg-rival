@@ -1,6 +1,7 @@
 # mtg-rival-pilot — piloto LLM para Magic (Pauper) sobre Forge + mtg-bench
 
 Workspace de Claudio (aprobado por Jorge el 12/10/2026). **No tocar `~/dev/mtg-rival`** (es de Grok, read-only).
+**Repo (desde el 15/10, pedido de Jorge "vamos a usar este repo"): `github.com/sagasti/mtg-rival` (privado, rama `main`)**; `vendor/mtg-bench` es submódulo del fork `github.com/sagasti/mtg-bench` (público, como todo fork de un repo público; GPL-3.0), rama `pilot`. Flujo: cambios en el harness → commit en `vendor/mtg-bench` (rama `pilot`) + `git push fork pilot` → en la raíz `git add vendor/mtg-bench` y commit (bump del puntero). Commit/push sólo cuando Jorge lo pida. `patches/mtg-bench-pilot.patch` sigue como diff de referencia contra upstream.
 Historia, resultados y decisiones: `~/wiki/projects/mtg-rival.md` y `~/wiki/decisions/mtg-rival-piloto-llm-sobre-mtg-bench.md`.
 
 ## Qué hay
@@ -36,5 +37,4 @@ Keys: el wrapper exporta `MTG_LLM_KEY` desde `~/.claude/secrets/op-llm-proxy.env
 - Damage math: ya cuenta criaturas de maná y pump por `{T}` (Timberwatch); falta X, pump por hechizo, lifelink y el bloqueo (contra Bogles la partida se define bloqueando al Bogle encantado y la sección no lo modela). Medir si a GLM le conviene `reasoning_effort: high` ahora que la cuenta viene hecha.
 - Key de Anthropic si se quiere sentar a Fable/Opus (la del proxy sigue siendo la personal de Jorge, por pedido suyo).
 - `pricing` en `config/pilot.yaml` para que el reporte calcule costo.
-- Repo sin commits (Jorge no pidió); si se actualiza mtg-bench, reaplicar `patches/mtg-bench-pilot.patch` (fallback por timeout + damage math + seat humano web; el viejo `mtg-bench-timeout-fallback.patch` es un subconjunto).
 - Fases siguientes del plan: self-play RL en la nube, destilación LoRA al final.
