@@ -44,12 +44,23 @@ if a.limit:
 print(f"ejemplos: {len(rows)} (won-only={a.won_only})")
 ds = Dataset.from_list(rows).remove_columns(["kind", "won"])
 
-cfg = SFTConfig(
+import inspect
+kw = dict(
     output_dir=a.out, num_train_epochs=a.epochs, learning_rate=a.lr, lr_scheduler_type="cosine", warmup_ratio=0.03,
     per_device_train_batch_size=1, gradient_accumulation_steps=16, gradient_checkpointing=True, bf16=True,
     max_length=a.max_seq, completion_only_loss=True, packing=False, logging_steps=10, save_strategy="epoch", report_to=[],
     dataset_num_proc=4, seed=a.seed,
 )
+# Las versiones de TRL/transformers renombran argumentos: adaptar a lo que acepte la instalada.
+accepted = set(inspect.signature(SFTConfig.__init__).parameters)
+if "warmup_ratio" not in accepted:
+    kw.pop("warmup_ratio"); kw["warmup_steps"] = 20
+if "max_length" not in accepted and "max_seq_length" in accepted:
+    kw["max_seq_length"] = kw.pop("max_length")
+dropped = [k for k in kw if k not in accepted]
+kw = {k: v for k, v in kw.items() if k in accepted}
+print("SFTConfig: ignorados", dropped)
+cfg = SFTConfig(**kw)
 peft = LoraConfig(r=a.rank, lora_alpha=2 * a.rank, lora_dropout=0.05, target_modules="all-linear", task_type="CAUSAL_LM")
 trainer = SFTTrainer(model=a.model, args=cfg, train_dataset=ds, processing_class=tok, peft_config=peft)
 trainer.train()

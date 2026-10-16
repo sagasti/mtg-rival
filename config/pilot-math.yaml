@@ -16,6 +16,7 @@ event:
   knowledge: oracle           # texto oracle inline de cada carta que aparece en la decisión; sin tools por ahora
   damageMath: true          # parche piloto: sección "Damage math" (daño disponible, letal, combate entrante) calculada por el harness
   mulliganMath: true        # parche piloto (15/10): sección "Keep or mulligan" (tierras, fuentes, odds de land drops, veredicto heurístico)
+  mulliganPolicy: strict     # parche piloto (16/10): los casos claros (0 tierras, una tierra sin plan, 5+ tierras en 7) los contesta el harness; el modelo se quedaba one-landers contra el veredicto
   plansFile: /Users/jorge/dev/mtg-rival-pilot/knowledge/plans.yaml   # parche piloto (15/10): sección "Game plan" por cruce, rival inferido de lo visible
   playDrawAlternate: false  # true = el match impar sale el seat 0 y el par el seat 1 (vara balanceada); bin/bench.sh --alternate lo prende
   cubeStudy: false

@@ -72,8 +72,10 @@ plans:
     then stack auras in the order the matchup needs: Ethereal Armor (first strike, grows with every enchantment),
     Rancor (trample, returns to hand if it goes to the graveyard), Ancestral Mask (+2/+2 per other enchantment),
     Armadillo Cloak (trample and lifelink: the card that wins races). Utopia Sprawl and Abundant Growth are ramp AND
-    enchantments for Mask/Armor counts. Keep a second creature in hand against edicts and sweepers. Malevolent Rumble
-    digs for a creature. Keep hands with 2 lands plus a creature and an aura; one-landers are mulligans.
+    enchantments for Mask/Armor counts. NEVER put an aura on an Eldrazi Spawn token or any creature without hexproof
+    unless it is lethal this turn: it eats their removal and the aura goes with it. Keep a second creature in hand
+    against edicts and sweepers. Malevolent Rumble digs for a creature. Keep hands with 2 lands plus a creature and
+    an aura; one-landers are mulligans.
   "bogles|red-madness": >-
     Their burn cannot target your hexproof creature. The only risk is the turn the creature is cast naked: Lava Dart
     or a Flamebreather ping kills a 1/1, so cast the creature when they have little mana or accept the risk early.
@@ -91,16 +93,21 @@ plans:
     or Serpent; Rancor's trample makes chump blocks useless. Counter nothing yourself: you have no interaction, so go
     fast and do not hold back creatures: an extra Bogle after the first resolves is fine.
   "bogles|grixis-control": >-
-    Snuff Out, Cast Down and Cut Down cannot target hexproof. Their real answers: Suffocating Fumes (-1/-1: a naked
-    Bogle dies), Extract a Confession (edict: keep a second creature so you sacrifice the spare), Baleful Strix and
-    Thorn (deathtouch blockers: Ethereal Armor's first strike kills them before they deal damage, so Armor first),
-    and Counterspell on your creatures. Resolve the creature when they tap out, give it Armor before attacking into
-    deathtouch, keep two creatures on board, attack to take the monarch when Thorn lands.
+    Snuff Out, Cast Down and Cut Down cannot target hexproof: play ONLY hexproof creatures, never enchant the Eldrazi
+    Spawn token (Snuff Out and the edict eat it with every aura on it). Their real answers: Extract a Confession (edict:
+    always keep a second creature on board or in hand, so you sacrifice the spare, and do not dump every aura before
+    the edict is gone), Suffocating Fumes (-1/-1: a naked 1/1 dies, so put the first aura on the turn the creature
+    lands if they have 2 mana open), Baleful Strix and Thorn (deathtouch blockers: Ethereal Armor's first strike kills
+    them before they deal damage, so Armor first and attack), and Counterspell/Spell Pierce on your spells: cast the
+    creature when they are tapped out or bait with the cheaper creature first; auras after a creature resolved. Attack
+    to take the monarch when Thorn lands.
   "bogles|azorius-faeries": >-
-    Spellstutter Sprite counters your cheap creatures and auras while a Faerie is on board: cast them when the Sprite
-    count is low or they are tapped. Dispatch cannot target hexproof, but Thraben Charm can destroy one aura: spread
-    auras across two creatures and keep Rancor (it comes back). Their fliers chump: Rancor and Cloak give trample.
-    Race with lifelink; they are a slow clock.
+    Spellstutter Sprite counters a spell with mana value up to their Faerie count, at instant speed with one blue open:
+    cast your one-mana creatures and auras when they are tapped out or when the Sprite count is zero, and bait with
+    the spare creature before the aura that matters. Dispatch cannot target hexproof, but Thraben Charm destroys one
+    aura: spread auras across two creatures, Rancor first (it comes back), and do not stack three on one creature
+    while they hold white mana. Their fliers chump: Rancor and Cloak give trample. Race with lifelink; they are a slow
+    clock, so a creature with Cloak beats their whole air force.
 
   # ---------------------------------------------------------------- Elves
   "elves|*": >-

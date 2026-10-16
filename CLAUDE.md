@@ -15,7 +15,7 @@ viven en `CLAUDE.local.md` (no versionado) y en el wiki privado del proyecto.
   rompe los JVMs vivos.
 - `vendor/mtg-bench` es un submódulo (rama `pilot` del fork). Cambios al harness: commit ahí primero, push a la rama
   `pilot`, después bump del puntero en este repo. `patches/mtg-bench-pilot.patch` es el diff de referencia contra
-  upstream (regenerar con `git add -N . && git diff HEAD` dentro del submódulo).
+  upstream (regenerar con `git add -N . && git diff 0870cb6` dentro del submódulo (0870cb6 = el commit base de upstream)).
 - Commit y push sólo cuando el dueño del repo lo pide.
 
 ## Cómo se mide
