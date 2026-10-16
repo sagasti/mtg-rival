@@ -3,7 +3,7 @@
 # Uso: runpod/pod.sh status | ssh [cmd...] | put <local> <remoto> | get <remoto> <local> | url | stop | start
 set -euo pipefail
 [[ -f "$HOME/.claude/secrets/runpod.env" ]] && { set -a; source "$HOME/.claude/secrets/runpod.env"; set +a; }
-POD="${POD:-wasrcrnmaa6zcc}"
+POD="${POD:-g3xg3gouirfi7v}"
 gql() { curl -s "https://api.runpod.io/graphql?api_key=$RUNPOD_API_KEY" -H 'content-type: application/json' -d "{\"query\":\"$1\"}"; }
 ports() { gql "query { pod(input:{podId:\\\"$POD\\\"}) { desiredStatus runtime { uptimeInSeconds ports { ip isIpPublic privatePort publicPort type } } } }"; }
 sshaddr() { ports | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{const r=JSON.parse(s).data.pod.runtime; const p=r&&r.ports&&r.ports.find(p=>p.privatePort===22&&p.isIpPublic); if(!p){console.error("el pod no expone SSH todavía (runtime vacío)");process.exit(1)} console.log(p.ip+" "+p.publicPort)})'; }

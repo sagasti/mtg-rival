@@ -3,11 +3,12 @@
 # el bridge compilado, la base de cartas y vLLM. Idempotente: se puede re-correr. Todo bajo /workspace (network volume).
 # Uso: bash setup-pod.sh   (vars opcionales: REPO, FORGE_URL, FORGE_TARBALL=/workspace/forge-installer-2.0.15.tar.bz2)
 set -euo pipefail
+export LANG=C.UTF-8 LC_ALL=C.UTF-8 JAVA_TOOL_OPTIONS=-Dfile.encoding=UTF-8
 W=/workspace; REPO="${REPO:-https://github.com/sagasti/mtg-rival.git}"
 FORGE_TARBALL="${FORGE_TARBALL:-$W/forge-installer-2.0.15.tar.bz2}"
-FORGE_URL="${FORGE_URL:-https://releases.cardforge.org/forge/forge-gui-desktop/2.0.15/forge-installer-2.0.15.tar.bz2}"
+FORGE_URL="${FORGE_URL:-https://github.com/Card-Forge/forge/releases/download/forge-2.0.15/forge-installer-2.0.15.tar.bz2}"
 export DEBIAN_FRONTEND=noninteractive
-apt-get update -qq && apt-get install -y -qq openjdk-17-jdk-headless bzip2 git curl tmux >/dev/null
+apt-get update -qq && apt-get install -y -qq openjdk-17-jdk-headless bzip2 unzip git curl tmux >/dev/null
 if ! command -v node >/dev/null || [[ "$(node -v)" != v22* ]]; then curl -fsSL https://deb.nodesource.com/setup_22.x | bash - >/dev/null && apt-get install -y -qq nodejs >/dev/null; fi
 cd $W
 [[ -d mtg-rival ]] || git clone --recurse-submodules "$REPO" mtg-rival
@@ -21,7 +22,7 @@ mkdir -p forge-user forge-cache
 (cd vendor/mtg-bench && npm install --no-audit --no-fund >/dev/null)
 npm install --no-audit --no-fund >/dev/null
 # bridge
-(cd vendor/mtg-bench/bridge && mkdir -p build/classes-v2 && javac --release 17 -cp ../../../forge/forge-gui-desktop-2.0.15-jar-with-dependencies.jar -d build/classes-v2 $(find src -name '*.java') && jar cf build/mtg-bench-bridge-v2.jar -C build/classes-v2 .)
+(cd vendor/mtg-bench/bridge && mkdir -p build/classes-v2 && javac -encoding UTF-8 --release 17 -cp ../../../forge/forge-gui-desktop-2.0.15-jar-with-dependencies.jar -d build/classes-v2 $(find src -name '*.java') && jar cf build/mtg-bench-bridge-v2.jar -C build/classes-v2 .)
 # base de cartas desde los scripts de Forge
 [[ -f vendor/mtg-bench/data/cards.json ]] || (cd vendor/mtg-bench && npm run --silent bench -- cards index --forge-res ../../forge/res)
 # los yaml traen paths absolutos de la Mac: reescribirlos al pod
