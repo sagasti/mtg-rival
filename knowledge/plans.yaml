@@ -2,23 +2,30 @@
 # El harness reconoce el mazo propio por las cartas firma vistas en mano/mesa/cementerio y el del rival por lo que mostró
 # (mesa, cementerio, pila, registro). "ours|theirs" o "ours|*" cuando todavía no se sabe. Texto en inglés: es lo que lee el modelo.
 # Escrito por Claudio 15/10/2026 a partir del diagnóstico de 132 partidas (dejó resolver Flamebreather, Cloak, Priest; keeps de 1 tierra).
+# `deck:` (19/10): la lista conocida del arquetipo, relativa a este archivo; la sección "Their open mana" descuenta lo visto y lista las respuestas que quedan.
 archetypes:
   red-madness:
+    deck: ../decks/pauper-red-madness.dck
     name: Mono Red Madness
     signature: [Kessig Flamebreather, Guttersnipe, Voldaren Epicure, Sneaky Snacker, Fiery Temper, Fireblast, Lava Dart, Lightning Bolt, Highway Robbery, Grab the Prize, Faithless Looting, Sazacap's Brew, Mountain]
   bogles:
+    deck: ../decks/pauper-bogles.dck
     name: Bogles
     signature: [Slippery Bogle, Gladecover Scout, Silhana Ledgewalker, Ancestral Mask, Armadillo Cloak, Ethereal Armor, Rancor, Utopia Sprawl, Abundant Growth, Malevolent Rumble, Cartouche of Solidarity, Kruphix's Insight, Sentinel's Eyes, Lifelink]
   elves:
+    deck: ../decks/pauper-elves.dck
     name: Elves
     signature: [Llanowar Elves, Fyndhorn Elves, Elvish Mystic, Priest of Titania, Timberwatch Elf, Quirion Ranger, Elvish Vanguard, Nyxborn Hydra, Masked Vandal, Lead the Stampede, Winding Way, Land Grant, Generous Ent, Avenging Hunter, Sagu Wildling]
   blue-terror:
+    deck: ../decks/pauper-blue-terror.dck
     name: Mono Blue Terror
     signature: [Tolarian Terror, Cryptic Serpent, Delver of Secrets, Insectile Aberration, Mental Note, Thought Scour, Sleep of the Dead, Deem Inferior, Force Spike, Deep Analysis]
   grixis-control:
+    deck: ../decks/pauper-grixis-control.dck
     name: Grixis Control
     signature: [Baleful Strix, Murmuring Mystic, Thorn of the Black Rose, Snuff Out, Cast Down, Cut Down, Plunder the Trollshaws, Campfire, Extract a Confession, Suffocating Fumes, Lose Focus, Contaminated Aquifer, Dimir Aqueduct, Bojuka Bog, Seething Landscape, Volatile Fjord, Preordain, Swamp]
   azorius-faeries:
+    deck: ../decks/pauper-azorius-faeries.dck
     name: Azorius Faeries
     signature: [Spellstutter Sprite, Faerie Seer, Moon-Circuit Hacker, Kor Skyfisher, Novice Inspector, Thraben Inspector, Thraben Charm, Dispatch, Cryogen Relic, Sewer-veillance Cam, "Leonardo, Big Brother", Ancient Den, Seat of the Synod, Razortide Bridge, Idyllic Beachfront, Snow-Covered Plains, Faerie Guidemother, Of One Mind, Palace Sentinels]
 
@@ -92,24 +99,14 @@ plans:
     your hexproof creature. In combat Ethereal Armor (first strike) and Cloak (lifelink) let one creature beat Terror
     or Serpent; Rancor's trample makes chump blocks useless. Counter nothing yourself: you have no interaction, so go
     fast and do not hold back creatures: an extra Bogle after the first resolves is fine.
-  "bogles|grixis-control": >-
-    Snuff Out, Cast Down and Cut Down cannot target hexproof: play ONLY hexproof creatures, never enchant the Eldrazi
-    Spawn token (Snuff Out and the edict eat it with every aura on it). Their real answers: Extract a Confession (edict:
-    always keep a second creature on board or in hand, so you sacrifice the spare, and do not dump every aura before
-    the edict is gone), Suffocating Fumes (-1/-1: a naked 1/1 dies, so put the first aura on the turn the creature
-    lands if they have 2 mana open), Baleful Strix and Thorn (deathtouch blockers: Ethereal Armor's first strike kills
-    them before they deal damage, so Armor first and attack), and Counterspell/Spell Pierce on your spells: cast the
-    creature when they are tapped out or bait with the cheaper creature first; auras after a creature resolved. Attack
-    to take the monarch when Thorn lands.
-  "bogles|azorius-faeries": >-
-    Spellstutter Sprite counters a spell with mana value up to their Faerie count, at instant speed with one blue open:
-    cast your one-mana creatures and auras when they are tapped out or when the Sprite count is zero, and bait with
-    the spare creature before the aura that matters. Dispatch cannot target hexproof, but Thraben Charm destroys one
-    aura: spread auras across two creatures, Rancor first (it comes back), and do not stack three on one creature
-    while they hold white mana. Their fliers chump: Rancor and Cloak give trample. Race with lifelink; they are a slow
-    clock, so a creature with Cloak beats their whole air force.
+  "bogles|grixis-control": |
+    Their list: 4 Counterspell, 3 Spell Pierce, 1 Lose Focus (counters); 4 Snuff Out, 2 Cast Down, 2 Cut Down (targeted removal: hexproof is immune, the Eldrazi Spawn token is not); 1 Extract a Confession (you sacrifice your creature with the GREATEST power: a spare 1/1 does NOT save the enchanted one, only two creatures of similar size or auras spread over two bodies do); 1 Suffocating Fumes (-1/-1 to your creatures: a naked 1/1 dies); 4 Baleful Strix (1/1 flying deathtouch: it blocks and kills ANY attacker that lacks first strike or totem armor); 3 Murmuring Mystic (1/5 wall making a 1/1 flying bird per instant or sorcery: only trample gets damage past the birds); 3 Thorn of the Black Rose (deathtouch, makes them the monarch).
+    Order of operations: (1) land a hexproof creature when they are tapped out, or with the second creature first as bait; (2) against this deck Ethereal Armor is the first aura (first strike kills Strix and Thorn before they deal damage), then Rancor or Armadillo Cloak for trample over the Mystic and its birds, then Ancestral Mask; (3) while they have a blue source open and Spell Pierce unseen, cast the key aura keeping {2} unspent and cast Malevolent Rumble, Abundant Growth and Utopia Sprawl AFTER it, never before; (4) a creature without first strike does not attack into an untapped Strix unless the trample damage through wins the race, read the Combat section; (5) attack with the enchanted creature every turn the block is safe, and attack to take the monarch when Thorn lands; (6) never enchant the Spawn token, keep it as mana and as an edict body only when it is the biggest creature; (7) with nothing castable, play the land and hold cards: do not throw a lone creature into open Counterspell mana when a cantrip could bait it next turn.
 
-  # ---------------------------------------------------------------- Elves
+  "bogles|azorius-faeries": |
+    Their list: 4 Counterspell; 4 Spellstutter Sprite (flash 1/1 flier that counters a spell with mana value up to the number of Faeries they control once it is in play: with one blue open and no Faerie on board it counters only your 1-drops, with a Faerie already out it also counters Rancor and Ancestral Mask); 4 Dispatch (taps a creature, exiles it with three artifacts: cannot target hexproof); 4 Thraben Charm (destroys ONE aura, the creature stays, or damages a creature: assume it while white is open); 1 Lórien Revealed. Creatures: 4 Faerie Seer 1/1 flying, 4 Kor Skyfisher 2/3 flying (blocks and kills a 3/1 like Scout with Rancor), 4 Moon-Circuit Hacker, 4 Novice Inspector and 2 Thraben Inspector 1/2, 1 Leonardo (grows), 4 Cryogen Relic.
+    Plan: they race wide with small fliers and counter your spells. (1) Two spells a turn whenever you can: the cheap one first as bait, the aura that matters second; with them tapped out cast everything. (2) Spread auras over two creatures while they hold white mana (Charm kills one aura, not the creature); Rancor first, it comes back; Ancestral Mask when they are tapped out. (3) Attack only when the Combat section says the creature survives the block or the trample damage through is worth the trade: a 3/1 into an untapped Kor Skyfisher just dies. (4) BLOCK when you are behind in the race: a naked 1/1 Bogle or Scout chumps or trades with their 1/1 and 1/2 attackers instead of racing with 1 power; Armadillo Cloak lifelink is the card that flips the race, protect it. (5) Never waste a turn: with the key spell uncastable, develop a second creature or ramp. (6) Ethereal Armor's first strike beats every blocker they have.
+
   "elves|*": >-
     You are the swarm. Mana elf turn 1, Priest of Titania (one mana per Elf on both sides) and Timberwatch Elf next,
     Quirion Ranger untaps Priest for double mana, then dump the hand: Elvish Vanguard grows, Nyxborn Hydra is the

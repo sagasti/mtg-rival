@@ -20,6 +20,13 @@ juegue contra el bot, y una API HTTP + servidor MCP para que otros bots o agente
 
 Historia, resultados y decisiones con sus trade-offs viven en el wiki privado del proyecto.
 
+- **Capa experta del piloto** (`event.*` en los configs): `damageMath` (daño y letal), `mulliganMath` + `mulliganPolicy`
+  (keep/mull con veredicto vinculante en los casos claros), `plansFile` (planes por cruce y la lista conocida de cada
+  arquetipo), `combatMath` (cada bloqueo legal y su resultado, la carrera), `openMana` (maná abierto del rival y las
+  respuestas que le quedan), `auraPolicy` y `combatPolicy` (auras sólo sobre hexproof; nada con auras ataca contra
+  deathtouch destapado salvo letal). Herramientas de replay y perfil de errores en `vendor/mtg-bench/src/knowledge/`
+  (`expert-replay.ts`, `mistakes.ts`, `policy-replay.ts`).
+
 ## Setup
 
 1. **Forge 2.0.15** (sin parches) descomprimido en `forge/` (ignorado por git). Perfil aislado en `forge-user/` y `forge-cache/`.

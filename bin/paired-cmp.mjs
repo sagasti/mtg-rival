@@ -14,7 +14,7 @@ const COUNTERS = new Set(["Counterspell","Spell Pierce","Lose Focus","Essence Sc
 function load(run) {
   const dir = path.join(root, "runs", run); const jl = (f) => fs.readFileSync(path.join(dir, f), "utf8").split("\n").filter(Boolean).map((l) => JSON.parse(l));
   const prompts = new Map(jl("rendered-prompts.jsonl").map((r) => [r.requestId, r])); const games = {};
-  for (const m of jl("matches.jsonl")) { const g = m.games[0]; const me = m.seats.indexOf(SEAT); games[m.round] = { win: g.winner === me, play: g.onThePlay === me, turns: g.turns, mulls: [], keep: null, counters: 0 }; }
+  for (const m of jl("matches.jsonl")) { const g = m.games[0]; if (!g) continue; const me = m.seats.indexOf(SEAT); games[m.round] = { win: g.winner === me, play: g.onThePlay === me, turns: g.turns, mulls: [], keep: null, counters: 0 }; }
   for (const d of jl("decisions.jsonl")) {
     if (d.seat !== SEAT) continue; const G = games[Number(d.matchId.match(/^h2h-(\d+)-/)[1])]; if (!G) continue;
     if (d.kind === "mulligan") {

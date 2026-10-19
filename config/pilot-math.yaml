@@ -17,6 +17,10 @@ event:
   damageMath: true          # parche piloto: sección "Damage math" (daño disponible, letal, combate entrante) calculada por el harness
   mulliganMath: true        # parche piloto (15/10): sección "Keep or mulligan" (tierras, fuentes, odds de land drops, veredicto heurístico)
   mulliganPolicy: strict     # parche piloto (16/10): los casos claros (0 tierras, una tierra sin plan, 5+ tierras en 7) los contesta el harness; el modelo se quedaba one-landers contra el veredicto
+  combatMath: true          # parche piloto (19/10): sección "Combat" (cada bloqueo posible y su resultado, la carrera)
+  openMana: true            # parche piloto (19/10): sección "Their open mana" (maná abierto del rival, respuestas instantáneas que le quedan en su lista, maná que te queda tras cada carta)
+  auraPolicy: strict        # parche piloto (19/10): un aura tuya nunca apunta a un token ni a una criatura sin hexproof si hay una con hexproof
+  combatPolicy: strict      # parche piloto (19/10): una criatura con auras y sin first strike no ataca contra un bloqueador con deathtouch destapado salvo letal
   plansFile: /Users/jorge/dev/mtg-rival-pilot/knowledge/plans.yaml   # parche piloto (15/10): sección "Game plan" por cruce, rival inferido de lo visible
   playDrawAlternate: false  # true = el match impar sale el seat 0 y el par el seat 1 (vara balanceada); bin/bench.sh --alternate lo prende
   cubeStudy: false
@@ -85,12 +89,12 @@ seats:
     label: "GLM 5.3 B (proxy LLM)"
     maxTokens: 8192
     reasoningEffort: low
-  - id: flash-none
+  - id: glm-hi                # glm con razonamiento alto sólo en las decisiones de combate y de objetivos (experimento 19/10)
     provider: openai
-    model: deepseek-v4.1-flash
-    baseUrl: ${MTG_LLM_BASE_URL}   # endpoint OpenAI-compatible; viene del entorno (bin/bench.sh lo exporta), nunca del repo
+    model: glm-5.3
+    baseUrl: ${MTG_LLM_BASE_URL}
     apiKeyEnv: MTG_LLM_KEY
-    label: "DeepSeek V4.1 Flash sin razonamiento (proxy LLM)"
+    label: "GLM 5.3 high en combate (proxy LLM)"
     maxTokens: 8192
-    temperature: 0.3
-    reasoningEffort: none     # 0 tokens de razonamiento, 41 de salida en el probe; respuesta correcta pero línea de juego equivocada
+    reasoningEffort: low
+    reasoningEffortByKind: { attackers: high, blockers: high, targets: high }
