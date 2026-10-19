@@ -7,6 +7,7 @@ respuesta la llamada a la tool con los ids elegidos. La pérdida se calcula sól
 Uso (en el pod):
   python3 train-sft.py --data /workspace/sft/decisions.jsonl --meta /workspace/sft/meta.json \
       --model Qwen/Qwen3-14B --out /workspace/loras/student-v1 [--won-only] [--max-seq 12288] [--epochs 1]
+  Ronda de self-play (sigue desde un adapter): --data sp1.jsonl --init-lora /workspace/loras/student-v2 --lr 5e-5
 Después: bash serve-student.sh Qwen/Qwen3-14B --lora /workspace/loras/student-v1
 """
 import argparse, json, random
@@ -21,6 +22,7 @@ ap.add_argument("--model", default="Qwen/Qwen3-14B"); ap.add_argument("--won-onl
 ap.add_argument("--max-seq", type=int, default=12288); ap.add_argument("--epochs", type=float, default=1.0)
 ap.add_argument("--lr", type=float, default=1e-4); ap.add_argument("--rank", type=int, default=32)
 ap.add_argument("--limit", type=int, default=0); ap.add_argument("--seed", type=int, default=7)
+ap.add_argument("--init-lora", default="")   # seguir entrenando un adapter existente (expert iteration); --rank sale del adapter
 a = ap.parse_args()
 
 meta = json.load(open(a.meta))
@@ -28,7 +30,7 @@ tok = AutoTokenizer.from_pretrained(a.model)
 tools = [{"type": "function", "function": {"name": t["name"], "description": t["description"], "parameters": t["parameters"]}} for t in meta["tools"]]
 
 rows = []
-for line in open(a.data):
+for line in (l for path in a.data.split(",") for l in open(path)):   # --data a.jsonl,b.jsonl
     d = json.loads(line)
     if a.won_only and not d["won"]:
         continue
@@ -49,7 +51,7 @@ kw = dict(
     output_dir=a.out, num_train_epochs=a.epochs, learning_rate=a.lr, lr_scheduler_type="cosine", warmup_ratio=0.03,
     per_device_train_batch_size=1, gradient_accumulation_steps=16, gradient_checkpointing=True, bf16=True,
     max_length=a.max_seq, completion_only_loss=True, packing=False, logging_steps=10, save_strategy="epoch", report_to=[],
-    dataset_num_proc=4, seed=a.seed,
+    dataset_num_proc=4, seed=a.seed, gradient_checkpointing_kwargs={"use_reentrant": False},
 )
 # Las versiones de TRL/transformers renombran argumentos: adaptar a lo que acepte la instalada.
 accepted = set(inspect.signature(SFTConfig.__init__).parameters)
@@ -62,7 +64,16 @@ kw = {k: v for k, v in kw.items() if k in accepted}
 print("SFTConfig: ignorados", dropped)
 cfg = SFTConfig(**kw)
 peft = LoraConfig(r=a.rank, lora_alpha=2 * a.rank, lora_dropout=0.05, target_modules="all-linear", task_type="CAUSAL_LM")
-trainer = SFTTrainer(model=a.model, args=cfg, train_dataset=ds, processing_class=tok, peft_config=peft)
+if a.init_lora:
+    import torch
+    from transformers import AutoModelForCausalLM
+    from peft import PeftModel
+    base = AutoModelForCausalLM.from_pretrained(a.model, dtype=torch.bfloat16)
+    model = PeftModel.from_pretrained(base, a.init_lora, is_trainable=True)
+    model.print_trainable_parameters()
+    trainer = SFTTrainer(model=model, args=cfg, train_dataset=ds, processing_class=tok)
+else:
+    trainer = SFTTrainer(model=a.model, args=cfg, train_dataset=ds, processing_class=tok, peft_config=peft)
 trainer.train()
 trainer.save_model(a.out)
 print("LoRA guardada en", a.out)

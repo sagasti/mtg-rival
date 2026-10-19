@@ -15,3 +15,4 @@ decks/visitantes/
 CLAUDE.local.md
 docs/PENDIENTES-HISTORICO.md
 data/sft/
+__pycache__/

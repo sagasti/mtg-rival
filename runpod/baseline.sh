@@ -5,8 +5,10 @@ set -euo pipefail
 cd /workspace/mtg-rival && mkdir -p runs
 TAG="${1:-student0}"; shift || true
 export HF_HOME=/workspace/hf STUDENT_BASE_URL=http://127.0.0.1:8000/v1 STUDENT_KEY=x MTG_LLM_BASE_URL="${MTG_LLM_BASE_URL:-http://unused.invalid/v1}" MTG_LLM_KEY="${MTG_LLM_KEY:-unused}"
-if [[ "${1:-}" == "--lora" ]]; then export STUDENT_MODEL=student-lora; curl -sf -m 3 http://127.0.0.1:8000/v1/models | grep -q student-lora || bash runpod/serve-student.sh Qwen/Qwen3-14B --lora "$2"
-else export STUDENT_MODEL=student; curl -sf -m 3 http://127.0.0.1:8000/v1/models >/dev/null || bash runpod/serve-student.sh Qwen/Qwen3-14B; fi
+# Los JVMs en paralelo se pisan creando el perfil de Forge en un contenedor nuevo ("cannot create profile directory"): pre-crearlo.
+mkdir -p ~/.forge/{custom/editions,decks/{commander,constructed,draft,net,network-events,oathbreaker,planar,scheme,sealed},gauntlet,preferences,quest/saves} ~/.cache/forge/{db,pics}
+if [[ "${1:-}" == "--lora" ]]; then export STUDENT_MODEL=student-lora; { curl -sf -m 3 http://127.0.0.1:8000/v1/models | grep -q student-lora && [[ "$(cat /workspace/vllm.lora 2>/dev/null)" == "$2" ]]; } || bash runpod/serve-student.sh Qwen/Qwen3-14B --lora "$2"
+else export STUDENT_MODEL=student; { curl -sf -m 3 http://127.0.0.1:8000/v1/models >/dev/null && [[ -z "$(cat /workspace/vllm.lora 2>/dev/null)" ]]; } || bash runpod/serve-student.sh Qwen/Qwen3-14B; fi
 D=/workspace/mtg-rival/decks
 short() { echo "$1" | sed 's/red-madness/red/; s/blue-terror/terror/'; }
 run() { local a="$1" b="$2"; local id="$TAG-$(short "$a")-vs-$(short "$b")-x12-seed101"

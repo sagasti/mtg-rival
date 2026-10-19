@@ -1,14 +1,17 @@
 #!/usr/bin/env node
 // Exporta las decisiones grabadas de los seats LLM como dataset de fine-tuning (prompt renderizado -> respuesta),
-// con el resultado de la partida para filtrar por outcome. Uso: bin/export-sft.mjs [out=data/sft/decisions.jsonl] [--runs glob]
+// con el resultado de la partida para filtrar por outcome. Uso: bin/export-sft.mjs [out=data/sft/decisions.jsonl] [--runs prefijo[,prefijo]]
 // Cada línea: {run, matchId, game, seat, model, kind, turn, won, onThePlay, requestId, prompt, choice, choiceLabels}
 import fs from "node:fs"; import path from "node:path"; import { fileURLToPath } from "node:url";
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const out = process.argv[2] ?? "data/sft/decisions.jsonl";
+const argv = process.argv.slice(2); const flag = (k) => { const i = argv.indexOf(k); return i >= 0 ? argv[i + 1] : undefined; };
+const out = argv.find((a, i) => !a.startsWith("--") && (i === 0 || !argv[i - 1].startsWith("--"))) ?? "data/sft/decisions.jsonl";
+const prefixes = (flag("--runs") ?? "").split(",").filter(Boolean);   // --runs sp1-play-,sp2-play- → sólo esos runs
 const LLM = new Set(["openai", "anthropic", "openrouter", "gemini"]);
 fs.mkdirSync(path.dirname(path.resolve(root, out)), { recursive: true });
 const w = fs.createWriteStream(path.resolve(root, out)); const stats = { runs: 0, games: 0, lines: 0, bySeat: {}, byKind: {}, won: 0 };
 for (const run of fs.readdirSync(path.join(root, "runs")).sort()) {
+  if (prefixes.length && !prefixes.some((p) => run.startsWith(p))) continue;
   const dir = path.join(root, "runs", run); if (!fs.existsSync(path.join(dir, "rendered-prompts.jsonl")) || !fs.existsSync(path.join(dir, "matches.jsonl"))) continue;
   const jl = (f) => fs.readFileSync(path.join(dir, f), "utf8").split("\n").filter(Boolean).map((l) => JSON.parse(l));
   const prompts = new Map(jl("rendered-prompts.jsonl").map((r) => [r.requestId, r.prompt]));
