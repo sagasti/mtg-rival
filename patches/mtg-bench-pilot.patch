@@ -208,7 +208,7 @@ index 0000000..535d1c9
 +
 +export function humanServer() { return shared; }
 diff --git a/src/agents/llm.ts b/src/agents/llm.ts
-index 963976d..000ff42 100644
+index 963976d..20ebb9b 100644
 --- a/src/agents/llm.ts
 +++ b/src/agents/llm.ts
 @@ -9,6 +9,8 @@ import type { AgentResult, CallObserver, DecisionAgent } from "./agent.ts";
@@ -220,7 +220,20 @@ index 963976d..000ff42 100644
  import { deckKey, deckStats, renderDeckStats } from "../deckbuild/stats.ts";
  
  export class LlmAgent implements DecisionAgent {
-@@ -48,6 +50,8 @@ export class LlmAgent implements DecisionAgent {
+@@ -23,7 +25,11 @@ export class LlmAgent implements DecisionAgent {
+     private kb: KnowledgeBase,
+     /** When set, every rendered decision prompt is appended here (event.recordPrompts). */
+     private promptLog?: Jsonl,
+-  ) { this.kind = seat.provider; }
++  ) {
++    this.kind = seat.provider;
++    // Pilot patch: a seat may switch the knowledge sections / policies on or off for itself (asymmetric A/B in one run).
++    if (seat.eventOverrides) this.event = { ...event, ...seat.eventOverrides };
++  }
+ 
+   get model() { return this.provider.model; }
+ 
+@@ -48,6 +54,8 @@ export class LlmAgent implements DecisionAgent {
      const clock = new DecisionClock(this.event.decisionTimeoutSec * 1000);
      let usage: TokenUsage = { ...ZERO_USAGE };
      const toolCalls: Record<string, number> = {};
@@ -229,7 +242,7 @@ index 963976d..000ff42 100644
      let modelCalls = 0, truncated = 0;
      let specViolation: string | undefined;
      const result = (notes: string | null, extra: Partial<MatchNotesResult> = {}): MatchNotesResult =>
-@@ -76,11 +80,11 @@ export class LlmAgent implements DecisionAgent {
+@@ -76,11 +84,11 @@ export class LlmAgent implements DecisionAgent {
     * cut off by the output cap is recorded as truncated and asked again once with a bigger cap; every answer is checked
     * against the seat's spec. Throws when the provider keeps failing or the clock runs out.
     */
@@ -243,7 +256,7 @@ index 963976d..000ff42 100644
      for (;;) {
        const t0 = Date.now();
        let turn: ModelTurn;
-@@ -109,7 +113,83 @@ export class LlmAgent implements DecisionAgent {
+@@ -109,7 +117,83 @@ export class LlmAgent implements DecisionAgent {
      }
    }
  
@@ -327,7 +340,7 @@ index 963976d..000ff42 100644
      const system = systemPrompt(this.event, req.phase, ctx.brief);
      const tools = toolsForTier(this.event.knowledge);
      const first = renderRequest(req, this.event, this.db, ctx.notes, ctx.matchNotes);
-@@ -139,7 +219,9 @@ export class LlmAgent implements DecisionAgent {
+@@ -139,7 +223,9 @@ export class LlmAgent implements DecisionAgent {
        proposals.push({ response: resp, key: deckKey(resp.choice, resp.basics), cards: stats.cards, lands: stats.lands });
        return stats;
      };
@@ -337,7 +350,7 @@ index 963976d..000ff42 100644
        // A failure after a valid proposal (invalid answers, the clock, the provider): that proposal is the agent's deck;
        // the failure is kept on the review record.
        if (!response && proposals.length) {
-@@ -181,8 +263,20 @@ export class LlmAgent implements DecisionAgent {
+@@ -181,8 +267,20 @@ export class LlmAgent implements DecisionAgent {
      try {
        for (let round = 0; round < maxRounds; round++) {
          let out;
@@ -478,7 +491,7 @@ index c4f0343..117abeb 100644
      }
      case "conformance": {
 diff --git a/src/config.ts b/src/config.ts
-index 3de7fb9..160521b 100644
+index 3de7fb9..32631e6 100644
 --- a/src/config.ts
 +++ b/src/config.ts
 @@ -11,6 +11,7 @@ export type ProviderName =
@@ -489,7 +502,7 @@ index 3de7fb9..160521b 100644
    | "gemini"             // Google's OpenAI-compatible endpoint
    | "random"             // uniform random legal choice (floor anchor)
    | "rank-bot"           // drafts by CubeCobra rank, builds 2-colour 23/17, plays greedily
-@@ -32,6 +33,20 @@ export interface SeatConfig {
+@@ -32,8 +33,24 @@ export interface SeatConfig {
    thinkingBudget?: number;
    /** OpenAI-style reasoning effort ("low" | "medium" | "high"). */
    reasoningEffort?: string;
@@ -509,8 +522,12 @@ index 3de7fb9..160521b 100644
 +  decisionTimeoutSec?: number;
    /** Extra JSON merged into every request body (provider-specific knobs). */
    extraBody?: Record<string, unknown>;
++  /** Pilot patch: per-seat overrides of the knowledge/policy event flags (to pit an expert seat against a frozen one in the same run). */
++  eventOverrides?: Partial<Pick<EventConfig, "damageMath" | "mulliganMath" | "mulliganPolicy" | "plansFile" | "combatMath" | "openMana" | "auraPolicy" | "combatPolicy">>;
    headers?: Record<string, string>;
-@@ -99,6 +114,28 @@ export interface EventConfig {
+   /** Max concurrent in-flight model calls for this seat (rate-limit guard); unset = no limit. Queue time isn't charged to the agent. */
+   concurrency?: number;
+@@ -99,6 +116,28 @@ export interface EventConfig {
     * the agent's clock. Optional, with no entry in the defaults, so configs that don't set it keep their config hash.
     */
    providerRetryWindowSec?: number;
@@ -539,7 +556,7 @@ index 3de7fb9..160521b 100644
  }
  
  export interface EngineConfig {
-@@ -135,8 +172,22 @@ const EVENT_DEFAULTS: Omit<EventConfig, "name" | "cube"> = {
+@@ -135,8 +174,22 @@ const EVENT_DEFAULTS: Omit<EventConfig, "name" | "cube"> = {
    cubeStudy: true, briefMaxWords: 1000, briefScope: "all", parallelMatches: 4, priorityStops: "smart", manaPayment: "smart", maxFailureRate: 0.05,
  };
  
@@ -563,7 +580,7 @@ index 3de7fb9..160521b 100644
    const event: EventConfig = { ...EVENT_DEFAULTS, ...(raw.event ?? {}) };
    if (!event.name) throw new Error("event.name is required");
    if (!event.cube) throw new Error("event.cube is required");
-@@ -174,7 +225,7 @@ export function validateConfig(cfg: BenchConfig) {
+@@ -174,7 +227,7 @@ export function validateConfig(cfg: BenchConfig) {
      else if (ids.has(s.id)) errs.push(`${where}: duplicate id`);
      ids.add(s.id);
      const llm = ["anthropic", "openai", "openrouter", "gemini"].includes(s.provider);
@@ -572,7 +589,7 @@ index 3de7fb9..160521b 100644
        errs.push(`${where}: unknown provider "${s.provider}"`);
      if (llm && !s.model) errs.push(`${where}: model is required for provider ${s.provider}`);
      if (llm && !s.apiKeyEnv && !s.baseUrl) errs.push(`${where}: apiKeyEnv is required for provider ${s.provider}`);
-@@ -195,6 +246,17 @@ export function validateConfig(cfg: BenchConfig) {
+@@ -195,6 +248,17 @@ export function validateConfig(cfg: BenchConfig) {
    if (cfg.event.format === "swiss" && !(Number.isInteger(cfg.event.rounds) && cfg.event.rounds >= 1 && cfg.event.rounds <= podSize - 1)) errs.push(`event.rounds must be 1–${podSize - 1} for Swiss (${podSize} seats)`);
    if (cfg.engine.type === "forge" && !cfg.engine.forgeDir) errs.push("engine.forgeDir is required when engine.type is forge");
    if (cfg.event.schedule !== undefined && !["pool", "rounds"].includes(cfg.event.schedule)) errs.push("event.schedule must be pool or rounds");
