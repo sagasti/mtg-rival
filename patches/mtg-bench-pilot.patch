@@ -208,19 +208,20 @@ index 0000000..535d1c9
 +
 +export function humanServer() { return shared; }
 diff --git a/src/agents/llm.ts b/src/agents/llm.ts
-index 963976d..20ebb9b 100644
+index 963976d..484e064 100644
 --- a/src/agents/llm.ts
 +++ b/src/agents/llm.ts
-@@ -9,6 +9,8 @@ import type { AgentResult, CallObserver, DecisionAgent } from "./agent.ts";
+@@ -9,6 +9,9 @@ import type { AgentResult, CallObserver, DecisionAgent } from "./agent.ts";
  import { type ChatMessage, type CompleteArgs, DecisionClock, type FailureDetail, type ModelTurn, type Provider, ProviderError } from "./providers/types.ts";
  import { info, type Jsonl } from "../util/log.ts";
  import { hasPrompt, renderRequest, renderTemplate, systemPrompt } from "./render.ts";
 +import { mulliganVerdict } from "../knowledge/mulligan.ts";
-+import { suicidalAttackers } from "../knowledge/combat.ts";
++import { lethalBlocks, suicidalAttackers } from "../knowledge/combat.ts";
++import { castingPlan } from "../knowledge/interaction.ts";
  import { deckKey, deckStats, renderDeckStats } from "../deckbuild/stats.ts";
  
  export class LlmAgent implements DecisionAgent {
-@@ -23,7 +25,11 @@ export class LlmAgent implements DecisionAgent {
+@@ -23,7 +26,11 @@ export class LlmAgent implements DecisionAgent {
      private kb: KnowledgeBase,
      /** When set, every rendered decision prompt is appended here (event.recordPrompts). */
      private promptLog?: Jsonl,
@@ -233,16 +234,17 @@ index 963976d..20ebb9b 100644
  
    get model() { return this.provider.model; }
  
-@@ -48,6 +54,8 @@ export class LlmAgent implements DecisionAgent {
+@@ -48,6 +55,9 @@ export class LlmAgent implements DecisionAgent {
      const clock = new DecisionClock(this.event.decisionTimeoutSec * 1000);
      let usage: TokenUsage = { ...ZERO_USAGE };
      const toolCalls: Record<string, number> = {};
 +    if (auraPolicy) toolCalls.aura_policy = auraPolicy;
 +    if (combatPolicy) toolCalls.combat_policy = combatPolicy;
++    if (sequencePolicy) toolCalls.sequence_policy = sequencePolicy;
      let modelCalls = 0, truncated = 0;
      let specViolation: string | undefined;
      const result = (notes: string | null, extra: Partial<MatchNotesResult> = {}): MatchNotesResult =>
-@@ -76,11 +84,11 @@ export class LlmAgent implements DecisionAgent {
+@@ -76,11 +86,11 @@ export class LlmAgent implements DecisionAgent {
     * cut off by the output cap is recorded as truncated and asked again once with a bigger cap; every answer is checked
     * against the seat's spec. Throws when the provider keeps failing or the clock runs out.
     */
@@ -256,7 +258,7 @@ index 963976d..20ebb9b 100644
      for (;;) {
        const t0 = Date.now();
        let turn: ModelTurn;
-@@ -109,7 +117,83 @@ export class LlmAgent implements DecisionAgent {
+@@ -109,7 +119,102 @@ export class LlmAgent implements DecisionAgent {
      }
    }
  
@@ -337,10 +339,29 @@ index 963976d..20ebb9b 100644
 +        }
 +      }
 +    }
++    // Pilot patch: lethal on the table and single blocks that stop it are not a judgment call (the model never blocked).
++    if (this.event.combatPolicy === "strict" && this.event.combatMath && req.kind === "blockers") {
++      const lb = lethalBlocks(req, this.db);
++      if (lb) {
++        info(`[${this.seat.id}] block policy: ${lb.why}`);
++        return { response: { choice: lb.ids, rationale: `block policy: ${lb.why}` }, usage: ZERO_USAGE, modelCalls: 0, toolCalls: { block_policy: 1 }, invalidAttempts: 0 };
++      }
++    }
++    // Pilot patch: no cantrip/ramp before the spell that matters while that would leave it exposed to a live tax counter.
++    let sequencePolicy = 0;
++    if (this.event.sequencePolicy === "strict" && this.event.openMana && req.kind === "priority") {
++      const plan = castingPlan(req, this.db, this.event.plansFile);
++      if (plan?.drop.length) {
++        const ids = new Set(plan.drop.map((d) => d.id));
++        req = { ...req, options: req.options.filter((o) => !ids.has(o.id)) };
++        sequencePolicy = plan.drop.length;
++        info(`[${this.seat.id}] sequence policy: not offering ${plan.drop.map((d) => `${d.name} (${d.reason})`).join("; ")}`);
++      }
++    }
      const system = systemPrompt(this.event, req.phase, ctx.brief);
      const tools = toolsForTier(this.event.knowledge);
      const first = renderRequest(req, this.event, this.db, ctx.notes, ctx.matchNotes);
-@@ -139,7 +223,9 @@ export class LlmAgent implements DecisionAgent {
+@@ -139,7 +244,9 @@ export class LlmAgent implements DecisionAgent {
        proposals.push({ response: resp, key: deckKey(resp.choice, resp.basics), cards: stats.cards, lands: stats.lands });
        return stats;
      };
@@ -350,7 +371,7 @@ index 963976d..20ebb9b 100644
        // A failure after a valid proposal (invalid answers, the clock, the provider): that proposal is the agent's deck;
        // the failure is kept on the review record.
        if (!response && proposals.length) {
-@@ -181,8 +267,20 @@ export class LlmAgent implements DecisionAgent {
+@@ -181,8 +288,20 @@ export class LlmAgent implements DecisionAgent {
      try {
        for (let round = 0; round < maxRounds; round++) {
          let out;
@@ -491,7 +512,7 @@ index c4f0343..117abeb 100644
      }
      case "conformance": {
 diff --git a/src/config.ts b/src/config.ts
-index 3de7fb9..32631e6 100644
+index 3de7fb9..cba673e 100644
 --- a/src/config.ts
 +++ b/src/config.ts
 @@ -11,6 +11,7 @@ export type ProviderName =
@@ -523,11 +544,11 @@ index 3de7fb9..32631e6 100644
    /** Extra JSON merged into every request body (provider-specific knobs). */
    extraBody?: Record<string, unknown>;
 +  /** Pilot patch: per-seat overrides of the knowledge/policy event flags (to pit an expert seat against a frozen one in the same run). */
-+  eventOverrides?: Partial<Pick<EventConfig, "damageMath" | "mulliganMath" | "mulliganPolicy" | "plansFile" | "combatMath" | "openMana" | "auraPolicy" | "combatPolicy">>;
++  eventOverrides?: Partial<Pick<EventConfig, "damageMath" | "mulliganMath" | "mulliganPolicy" | "plansFile" | "combatMath" | "openMana" | "auraPolicy" | "combatPolicy" | "sequencePolicy">>;
    headers?: Record<string, string>;
    /** Max concurrent in-flight model calls for this seat (rate-limit guard); unset = no limit. Queue time isn't charged to the agent. */
    concurrency?: number;
-@@ -99,6 +116,28 @@ export interface EventConfig {
+@@ -99,6 +116,30 @@ export interface EventConfig {
     * the agent's clock. Optional, with no entry in the defaults, so configs that don't set it keep their config hash.
     */
    providerRetryWindowSec?: number;
@@ -549,6 +570,8 @@ index 3de7fb9..32631e6 100644
 +  auraPolicy?: "advise" | "strict";
 +  /** Pilot patch: strict = an aura-wearing attacker without first strike is not offered when an untapped deathtouch creature can block it and the attack is not lethal (needs combatMath). */
 +  combatPolicy?: "advise" | "strict";
++  /** Pilot patch: strict = cantrips/ramp are not offered before a key spell while casting them first would leave that spell unable to pay a live Spell Pierce-style tax (needs openMana). */
++  sequencePolicy?: "advise" | "strict";
 +  /** Pilot patch: YAML with archetype signatures and matchup plans; a "Game plan" section is rendered when the seat's deck is recognised. */
 +  plansFile?: string;
 +  /** Pilot patch: decide play/draw by policy so that odd matches put seat 0 on the play and even matches seat 1 (balanced bars). */
@@ -556,7 +579,7 @@ index 3de7fb9..32631e6 100644
  }
  
  export interface EngineConfig {
-@@ -135,8 +174,22 @@ const EVENT_DEFAULTS: Omit<EventConfig, "name" | "cube"> = {
+@@ -135,8 +176,22 @@ const EVENT_DEFAULTS: Omit<EventConfig, "name" | "cube"> = {
    cubeStudy: true, briefMaxWords: 1000, briefScope: "all", parallelMatches: 4, priorityStops: "smart", manaPayment: "smart", maxFailureRate: 0.05,
  };
  
@@ -580,7 +603,7 @@ index 3de7fb9..32631e6 100644
    const event: EventConfig = { ...EVENT_DEFAULTS, ...(raw.event ?? {}) };
    if (!event.name) throw new Error("event.name is required");
    if (!event.cube) throw new Error("event.cube is required");
-@@ -174,7 +227,7 @@ export function validateConfig(cfg: BenchConfig) {
+@@ -174,7 +229,7 @@ export function validateConfig(cfg: BenchConfig) {
      else if (ids.has(s.id)) errs.push(`${where}: duplicate id`);
      ids.add(s.id);
      const llm = ["anthropic", "openai", "openrouter", "gemini"].includes(s.provider);
@@ -589,7 +612,7 @@ index 3de7fb9..32631e6 100644
        errs.push(`${where}: unknown provider "${s.provider}"`);
      if (llm && !s.model) errs.push(`${where}: model is required for provider ${s.provider}`);
      if (llm && !s.apiKeyEnv && !s.baseUrl) errs.push(`${where}: apiKeyEnv is required for provider ${s.provider}`);
-@@ -195,6 +248,17 @@ export function validateConfig(cfg: BenchConfig) {
+@@ -195,6 +250,19 @@ export function validateConfig(cfg: BenchConfig) {
    if (cfg.event.format === "swiss" && !(Number.isInteger(cfg.event.rounds) && cfg.event.rounds >= 1 && cfg.event.rounds <= podSize - 1)) errs.push(`event.rounds must be 1–${podSize - 1} for Swiss (${podSize} seats)`);
    if (cfg.engine.type === "forge" && !cfg.engine.forgeDir) errs.push("engine.forgeDir is required when engine.type is forge");
    if (cfg.event.schedule !== undefined && !["pool", "rounds"].includes(cfg.event.schedule)) errs.push("event.schedule must be pool or rounds");
@@ -602,6 +625,8 @@ index 3de7fb9..32631e6 100644
 +  if (cfg.event.auraPolicy !== undefined && !["advise", "strict"].includes(cfg.event.auraPolicy)) errs.push("event.auraPolicy must be advise or strict");
 +  if (cfg.event.combatPolicy !== undefined && !["advise", "strict"].includes(cfg.event.combatPolicy)) errs.push("event.combatPolicy must be advise or strict");
 +  if (cfg.event.combatPolicy === "strict" && !cfg.event.combatMath) errs.push("event.combatPolicy strict needs event.combatMath: true");
++  if (cfg.event.sequencePolicy !== undefined && !["advise", "strict"].includes(cfg.event.sequencePolicy)) errs.push("event.sequencePolicy must be advise or strict");
++  if (cfg.event.sequencePolicy === "strict" && !cfg.event.openMana) errs.push("event.sequencePolicy strict needs event.openMana: true");
 +  if (cfg.event.playDrawAlternate !== undefined && typeof cfg.event.playDrawAlternate !== "boolean") errs.push("event.playDrawAlternate must be true or false");
 +  if (cfg.event.plansFile !== undefined && (typeof cfg.event.plansFile !== "string" || !fs.existsSync(cfg.event.plansFile))) errs.push("event.plansFile must point to an existing YAML file");
    const w = cfg.event.providerRetryWindowSec;
@@ -1134,10 +1159,10 @@ index 0000000..09e80a4
 +</html>
 diff --git a/src/knowledge/combat.ts b/src/knowledge/combat.ts
 new file mode 100644
-index 0000000..53de484
+index 0000000..c53c56c
 --- /dev/null
 +++ b/src/knowledge/combat.ts
-@@ -0,0 +1,159 @@
+@@ -0,0 +1,203 @@
 +/**
 + * Pilot patch (mtg-rival): combat outcomes rendered into in-game prompts when event.combatMath is on. For every
 + * creature that could attack (or, on defence, every attacker to block) it lists each legal single block and what
@@ -1238,6 +1263,11 @@ index 0000000..53de484
 +      lines.push(`- ${label(a)}: ${opts.length ? opts.join("; ") : "no legal single block"}.`);
 +    }
 +    if (!blockers.length) lines.push("You have no untapped creature to block with.");
++    const theirPower = theirs.filter((p) => !/\bDefender\b/i.test(permText(p, db))).reduce((s, p) => s + power(p.pt), 0);
++    const myPower = mine.filter((p) => !/\bDefender\b/i.test(permText(p, db))).reduce((s, p) => s + power(p.pt), 0);
++    const t = (l: number, d: number) => (d > 0 ? Math.ceil(l / d) : Infinity);
++    const die = t(life - incoming, theirPower), kill = t(st.opponent.life ?? 0, myPower);
++    if (incoming < life && theirPower && die <= kill) lines.push(`⚠ Behind in the race: after this attack their ${theirPower} power kills you in ${die} more attack${die === 1 ? "" : "s"}, your ${myPower} power needs ${kill === Infinity ? "∞" : kill}. Blocks that trade or chump their biggest attacker buy a turn.`);
 +    return `## Combat\nComputed by the harness from the visible board: single blocks, no pump or tricks.\n${lines.map((l) => (l.startsWith("- ") ? l : `- ${l}`)).join("\n")}`;
 +  }
 +
@@ -1296,6 +1326,45 @@ index 0000000..53de484
 +    if (opt) out.push({ id: opt.id, name: a.name, blocker: killer.name, auras });
 +  }
 +  return out;
++}
++
++
++/**
++ * Pilot patch (combatPolicy strict): when the attack is lethal if unblocked and single blocks can bring it under our
++ * life, the blocks to declare: biggest attackers first, for each the best available blocker (kills and survives >
++ * trade > chump with the cheapest creature), until the remaining damage is survivable. Undefined when not lethal or
++ * when no assignment saves us (then the model decides).
++ */
++export function lethalBlocks(req: DecisionRequest, db: CardDb): { ids: string[]; why: string } | undefined {
++  if (req.phase !== "game" || req.kind !== "blockers") return undefined;
++  const st = req.state as GameState | undefined;
++  if (!st?.you || !st.opponent) return undefined;
++  const attackers = (st.combat ?? []).filter((c) => c.attacking === "you").map((p) => fighter(p, db));
++  const life = st.you.life ?? 0;
++  const incoming = attackers.reduce((s, a) => s + a.pow, 0);
++  if (!attackers.length || incoming < life) return undefined;
++  const blockers = (st.you.battlefield ?? []).filter((p) => p.pt && !p.tapped).map((p) => fighter(p, db));
++  const pair = new Map<string, string>();   // "blockerId->attackerId" -> option id
++  for (const o of req.options) { const m = o.id.match(/^(c\d+)->(c\d+)$/); if (m) pair.set(`${m[1]}->${m[2]}`, o.id); }
++  const used = new Set<string>(); const ids: string[] = []; const why: string[] = [];
++  let remaining = incoming;
++  const auras = (f: Fighter) => [...f.text.matchAll(/=Attached: ([^=]+)=/g)].flatMap((m) => m[1].split(",")).length;
++  for (const a of [...attackers].sort((x, y) => y.pow - x.pow)) {
++    if (remaining < life) break;
++    let best: { b: Fighter; score: number; through: number } | undefined;
++    for (const b of blockers) {
++      if (used.has(b.p.id ?? "") || !pair.has(`${b.p.id}->${a.p.id}`) || !canBlock(a, b)) continue;
++      const r = fight(a, b);
++      const score = (r.aDies && !r.bDies ? 300 : r.aDies && r.bDies ? 200 : 100) - auras(b) * 10 - b.pow - (r.umbra ? 5 : 0);
++      if (!best || score > best.score) best = { b, score, through: r.through };
++    }
++    if (!best) continue;
++    used.add(best.b.p.id ?? ""); ids.push(pair.get(`${best.b.p.id}->${a.p.id}`)!);
++    remaining -= a.pow - best.through;
++    why.push(`${best.b.name} blocks ${a.name}`);
++  }
++  if (!ids.length || remaining >= life) return undefined;
++  return { ids, why: `${incoming} incoming vs ${life} life: ${why.join(", ")} (${remaining} gets through)` };
 +}
 diff --git a/src/knowledge/damage-replay.ts b/src/knowledge/damage-replay.ts
 new file mode 100644
@@ -2038,10 +2107,10 @@ index 0000000..4bba33c
 +}
 diff --git a/src/knowledge/interaction.ts b/src/knowledge/interaction.ts
 new file mode 100644
-index 0000000..cb8b250
+index 0000000..2cdadd8
 --- /dev/null
 +++ b/src/knowledge/interaction.ts
-@@ -0,0 +1,147 @@
+@@ -0,0 +1,253 @@
 +/**
 + * Pilot patch (mtg-rival): "Their open mana" — what the opponent can do at instant speed right now and what answers
 + * are still in their list, rendered into in-game prompts when event.openMana is on. Reads the opponent's untapped
@@ -2138,35 +2207,13 @@ index 0000000..cb8b250
 +  if (!open.total) lines.push(`Opponent is TAPPED OUT (no untapped mana source) with ${handSize} card${handSize === 1 ? "" : "s"} in hand: nothing can be countered or killed at instant speed this turn.`);
 +  else lines.push(`Opponent has ${open.total} untapped mana source${open.total === 1 ? "" : "s"} (${colorsText(open)}) and ${handSize} card${handSize === 1 ? "" : "s"} in hand.`);
 +
-+  const arch = plansFile ? opponentArchetype(req, plansFile) : undefined;
-+  if (arch?.deckFile) {
-+    const deck = readDeck(arch.deckFile);
-+    const seen = seenCounts(st);
-+    const live: string[] = [], dead: string[] = [], later: string[] = [];
-+    for (const [name, n] of deck) {
-+      const c = getCard(db, name);
-+      if (!c || /\bLand\b/.test(c.types)) continue;
-+      const left = Math.max(0, n - (seen.get(name) ?? 0));
-+      if (!left) continue;
-+      const o = c.oracle;
-+      const instantSpeed = /\bInstant\b/.test(c.types) || /\bFlash\b/i.test(o) || c.keywords.some((k) => /^Flash$/i.test(k));
-+      const isAnswer = ANSWER_RE.test(o);
-+      const cost = parseForgeCost(c.manaCost) ?? { mana: 99, pips: {} };
-+      let free = "";
-+      const alt = o.match(/you may pay (\d+) life rather than pay this spell's mana cost/i);
-+      if (alt) {
-+        const cond = o.match(/^If you control an? (\w+),/im);
-+        const ok = !cond || (opp.battlefield ?? []).some((p) => new RegExp(`\\b${cond[1]}\\b`).test(typeLine(p, db)) || p.name === cond[1]);
-+        if (ok) free = ` or free for ${alt[1]} life`;
-+      }
-+      const can = open.total > 0 && (payable(cost, open) || !!free);
-+      const entry = `${name} ×${left} (${prettyCost(c.manaCost) || "free"}${free}: ${describe(c, st, db)})`;
-+      if (instantSpeed && (isAnswer || /counter target/i.test(o))) (can ? live : dead).push(entry);
-+      else if (isAnswer) later.push(`${name} ×${left}`);
-+    }
-+    if (open.total) lines.push(live.length ? `Instant-speed answers left in their list that the open mana can pay now: ${live.join("; ")}.` : `No instant-speed answer left in their list is castable with that open mana.`);
-+    if (dead.length) lines.push(`Left in their list but NOT castable with the open mana${open.total ? "" : " (tapped out)"}: ${dead.map((d) => d.replace(/ \(.*$/, "")).join(", ")}.`);
-+    if (later.length) lines.push(`Sorcery-speed answers still unseen: ${later.join(", ")}.`);
++  const scan = scanAnswers(req, db, plansFile);
++  if (scan) {
++    const { live, dead, later } = scan;
++    const fmt = (a: Answer) => `${a.name} ×${a.left} (${prettyCost(a.card.manaCost) || "free"}${a.free}: ${describe(a.card, st, db)})`;
++    if (open.total) lines.push(live.length ? `Instant-speed answers left in their list that the open mana can pay now: ${live.map(fmt).join("; ")}.` : `No instant-speed answer left in their list is castable with that open mana.`);
++    if (dead.length) lines.push(`Left in their list but NOT castable with the open mana${open.total ? "" : " (tapped out)"}: ${dead.map((a) => `${a.name} ×${a.left}`).join(", ")}.`);
++    if (later.length) lines.push(`Sorcery-speed answers still unseen: ${later.map((a) => `${a.name} ×${a.left}`).join(", ")}.`);
 +  }
 +
 +  // --- our mana after each castable card (to keep a tax up, or to see what a bait leaves) ---------------------------
@@ -2186,15 +2233,143 @@ index 0000000..cb8b250
 +      if (payable(cost, mine)) after.push(`${h.name} (${cost.mana}) → ${mine.total - cost.mana}`);
 +    }
 +    if (after.length) lines.push(`Your mana this turn: ${mine.total}${tokenMana ? ` (${tokenMana} of it only by SACRIFICING a creature token: do not count it for a spell that targets that token)` : ""}. Mana left after casting one card: ${after.join(", ")}.`);
++    const plan = castingPlan(req, db, plansFile);
++    if (plan) for (const l of plan.text) lines.push(l);
 +  }
 +  return `## Their open mana\n${lines.map((l) => `- ${l}`).join("\n")}`;
 +}
++
++// ---------------------------------------------------------------------------------------------------------------------
++// Answers in the opponent's known list, and the casting order against their live counters.
++
++interface Answer { name: string; left: number; card: CardDef; free: string; can: boolean; instantSpeed: boolean }
++
++/** The opponent's known list minus what they have shown, split by what their open mana can pay right now. */
++export function scanAnswers(req: DecisionRequest, db: CardDb, plansFile?: string): { live: Answer[]; dead: Answer[]; later: Answer[] } | undefined {
++  const st = req.state as GameState | undefined;
++  if (!st?.opponent) return undefined;
++  const arch = plansFile ? opponentArchetype(req, plansFile) : undefined;
++  if (!arch?.deckFile) return undefined;
++  const opp = st.opponent;
++  const open = openSources(opp, db);
++  const deck = readDeck(arch.deckFile);
++  const seen = seenCounts(st);
++  const live: Answer[] = [], dead: Answer[] = [], later: Answer[] = [];
++  for (const [name, n] of deck) {
++    const c = getCard(db, name);
++    if (!c || /\bLand\b/.test(c.types)) continue;
++    const left = Math.max(0, n - (seen.get(name) ?? 0));
++    if (!left) continue;
++    const o = c.oracle;
++    const instantSpeed = /\bInstant\b/.test(c.types) || /\bFlash\b/i.test(o) || c.keywords.some((k) => /^Flash$/i.test(k));
++    const isAnswer = ANSWER_RE.test(o);
++    const cost = parseForgeCost(c.manaCost) ?? { mana: 99, pips: {} };
++    let free = "";
++    const alt = o.match(/you may pay (\d+) life rather than pay this spell's mana cost/i);
++    if (alt) {
++      const cond = o.match(/^If you control an? (\w+),/im);
++      const ok = !cond || (opp.battlefield ?? []).some((p) => new RegExp(`\\b${cond[1]}\\b`).test(typeLine(p, db)) || p.name === cond[1]);
++      if (ok) free = ` or free for ${alt[1]} life`;
++    }
++    const can = open.total > 0 && (payable(cost, open) || !!free);
++    const a: Answer = { name, left, card: c, free, can, instantSpeed };
++    if (instantSpeed && (isAnswer || /counter target/i.test(o))) (can ? live : dead).push(a);
++    else if (isAnswer) later.push(a);
++  }
++  return { live, dead, later };
++}
++
++export interface Counter { name: string; left: number; hard: boolean; tax: number; maxMv?: number; noncreatureOnly: boolean }
++
++/** Counters the opponent can cast right now. */
++export function liveCounters(req: DecisionRequest, db: CardDb, plansFile?: string): Counter[] {
++  const scan = scanAnswers(req, db, plansFile);
++  if (!scan) return [];
++  const st = req.state as GameState;
++  const out: Counter[] = [];
++  for (const a of scan.live) {
++    const o = a.card.oracle;
++    if (!/counter target[^.]*spell/i.test(o)) continue;
++    const tax = Number(o.match(/unless its controller pays \{(\d+)\}/i)?.[1] ?? 0);
++    const only = o.match(/counter target (noncreature|creature|instant or sorcery) spell/i)?.[1];
++    if (only && only !== "noncreature") continue;   // narrow counters (creature-only, instant-only) are not modelled
++    let maxMv: number | undefined;
++    const x = o.match(/mana value X or less, where X is the number of (\w+)s? you control/i);
++    if (x) maxMv = (st.opponent?.battlefield ?? []).filter((p) => new RegExp(`\\b${x[1]}\\b`, "i").test(typeLine(p, db)) || new RegExp(`\\b${x[1]}\\b`, "i").test(p.text ?? "")).length + 1;
++    const fixedMv = o.match(/mana value (\d+) or less/i);
++    if (fixedMv && !x) maxMv = Number(fixedMv[1]);
++    out.push({ name: a.name, left: a.left, hard: !tax && maxMv === undefined, tax, maxMv, noncreatureOnly: only === "noncreature" });
++  }
++  return out;
++}
++
++const BAIT_RE = /draw a card|scry \d|surveil \d|search your library|reveal the top|^Enchant land|^Enchant Forest/im;
++interface Castable { id: string; name: string; cmc: number; role: "key" | "bait"; creature: boolean }
++
++/**
++ * Casting order for this main phase against the counters they can cast now: which spells are bait (cantrips, ramp)
++ * and which are the ones that matter, the mana each line leaves, and — under sequencePolicy strict — the bait casts
++ * that would leave a key spell without the mana to pay a Spell Pierce-style tax (those are dropped from the options).
++ */
++export function castingPlan(req: DecisionRequest, db: CardDb, plansFile?: string): { text: string[]; drop: { id: string; name: string; reason: string }[] } | undefined {
++  if (req.phase !== "game" || req.kind !== "priority") return undefined;
++  const st = req.state as GameState | undefined;
++  if (!st?.you || !st.opponent || st.activePlayer !== "you" || !/^MAIN/.test(String(st.phase ?? "")) || (st.stack ?? []).length) return undefined;
++  const mine = openSources(st.you, db);
++  const hand = st.you.hand ?? [];
++  let landFirst = "";
++  if ((st.you.landsPlayedThisTurn ?? 0) === 0) { const land = hand.find((h) => isLand(h, db)); if (land) { mine.total++; for (const c of landColors(land, db)) mine.byColor[c] = (mine.byColor[c] ?? 0) + 1; landFirst = land.name; } }
++  const creatures = (st.you.battlefield ?? []).filter((p) => p.pt);
++  const haveTarget = creatures.some((p) => !p.token);
++  const castables: Castable[] = [];
++  for (const o of req.options) {
++    const m = o.label.match(/^cast spell: your (.+?) \[Hand\]/); if (!m) continue;
++    const c = getCard(db, m[1]); if (!c) continue;
++    const cost = parseForgeCost(c.manaCost); if (!cost || cost.x || !payable(cost, mine)) continue;
++    const aura = /\bAura\b/.test(c.types) && /^Enchant creature/m.test(c.oracle);
++    if (aura && !haveTarget) continue;
++    const creature = /\bCreature\b/.test(c.types);
++    const role: Castable["role"] = creature || aura ? "key" : BAIT_RE.test(c.oracle) ? "bait" : "key";
++    if (!castables.some((x) => x.name === c.name)) castables.push({ id: o.id, name: c.name, cmc: cost.mana, role, creature });
++  }
++  if (!castables.length) return undefined;
++  const counters = liveCounters(req, db, plansFile);
++  const open = openSources(st.opponent, db);
++  const text: string[] = []; const drop: { id: string; name: string; reason: string }[] = [];
++  const keys = castables.filter((c) => c.role === "key").sort((a, b) => b.cmc - a.cmc);
++  const baits = castables.filter((c) => c.role === "bait").sort((a, b) => a.cmc - b.cmc);
++  const names = (xs: Castable[]) => xs.map((c) => `${c.name} (${c.cmc})`).join(", ");
++  if (!counters.length) {
++    text.push(open.total ? `No counter of theirs is live right now: cast what you want this turn${landFirst ? `, land (${landFirst}) first` : ""}. Spells that matter: ${names(keys) || "none"}; cantrips/ramp: ${names(baits) || "none"}.` : `They are tapped out: cast everything you want this turn${landFirst ? `, land (${landFirst}) first` : ""}.`);
++    return { text, drop };
++  }
++  text.push(`Live counters: ${counters.map((c) => `${c.name} ×${c.left} (${c.hard ? "hard counter" : c.tax ? `unless you pay {${c.tax}}` : ""}${c.noncreatureOnly ? ", noncreature spells only" : ""}${c.maxMv !== undefined ? `, mana value ≤ ${c.maxMv}` : ""})`).join("; ")}.`);
++  const taxers = counters.filter((c) => c.tax > 0);
++  const hard = counters.filter((c) => c.hard);
++  const sprite = counters.filter((c) => c.maxMv !== undefined);
++  if (taxers.length) {
++    const tax = Math.max(...taxers.map((c) => c.tax));
++    const hits = (c: Castable) => taxers.some((t) => !t.noncreatureOnly || !c.creature);
++    const plan: string[] = []; let left = mine.total;
++    for (const k of keys) { if (k.cmc > left) { plan.push(`${k.name} (${k.cmc}) does not fit this turn`); continue; } const after = left - k.cmc; plan.push(`${k.name} (${k.cmc}) → ${after} left${hits(k) ? (after >= tax ? `, pays the {${tax}} tax ✔` : `, CANNOT pay the tax ✘`) : ""}`); left = after; }
++    for (const b of baits) { if (left >= b.cmc) { left -= b.cmc; plan.push(`${b.name} (${b.cmc}) → ${left} left`); } }
++    text.push(`Order against the tax: ${landFirst ? `play ${landFirst}, then ` : ""}${plan.join("; ")}. Cantrips and ramp go AFTER the spell that matters, never before.`);
++    for (const k of keys) {
++      if (!hits(k) || mine.total - k.cmc < tax) continue;   // a key spell that can be cast with the tax up
++      for (const b of baits) if (mine.total - b.cmc - k.cmc < tax) drop.push({ id: b.id, name: b.name, reason: `cast first it leaves ${k.name} exposed to ${taxers.map((t) => t.name).join("/")}` });
++      break;
++    }
++  }
++  if (hard.length && castables.length >= 2) text.push(`${hard.map((c) => c.name).join("/")} live: lead with the spell you can afford to lose (${names(baits.length ? baits : keys.slice(-1))}), the one that matters second.`);
++  if (sprite.length) { const n = Math.max(...sprite.map((c) => c.maxMv!)); const exposed = castables.filter((c) => c.cmc <= n), safe = castables.filter((c) => c.cmc > n); text.push(`${sprite.map((c) => c.name).join("/")} counters mana value ≤ ${n} right now: exposed ${names(exposed) || "nothing"}; out of its reach ${names(safe) || "nothing"}.`); }
++  return { text, drop };
++}
 diff --git a/src/knowledge/mistakes.ts b/src/knowledge/mistakes.ts
 new file mode 100644
-index 0000000..f3fb908
+index 0000000..2475942
 --- /dev/null
 +++ b/src/knowledge/mistakes.ts
-@@ -0,0 +1,72 @@
+@@ -0,0 +1,74 @@
 +/** Pilot patch: count tactical mistakes of a seat over a recorded run, recomputing the Combat / open-mana sections on
 + *  each prompt (so runs recorded without them can be profiled too).
 + *  tsx src/knowledge/mistakes.ts <run dir> <plans.yaml> [--seat glm] [--verbose] */
@@ -2204,14 +2379,14 @@ index 0000000..f3fb908
 +import { getCard, loadDb } from "../cards/db.ts";
 +import type { DecisionOption, DecisionRequest } from "../types.ts";
 +import { combatMath } from "./combat.ts";
-+import { openMana } from "./interaction.ts";
++import { castingPlan, openMana } from "./interaction.ts";
 +const args = process.argv.slice(2); const flags: Record<string, string> = {}; const pos: string[] = [];
 +for (let i = 0; i < args.length; i++) { if (args[i].startsWith("--")) { if (args[i] === "--verbose") { flags.verbose = "1"; continue; } flags[args[i].slice(2)] = args[i + 1]; i++; } else pos.push(args[i]); }
 +const [run, plans] = pos; const seat = flags.seat ?? "glm";
 +const db = loadDb();
 +const jl = (f: string) => fs.readFileSync(path.join(run, f), "utf8").split("\n").filter(Boolean).map((l) => JSON.parse(l));
 +const prompts = new Map<string, string>(jl("rendered-prompts.jsonl").filter((r) => r.seat === seat).map((r) => [r.requestId, r.prompt]));
-+const counts: Record<string, number> = { decisions: 0, attackers: 0, risky_attack: 0, blockers: 0, no_block_lethal: 0, declined_good_block: 0, aura_targets: 0, aura_on_non_hexproof: 0, casts: 0, pierce_exposed: 0, cast_into_open_counter: 0, cast_tapped_out: 0, pass_tapped_out_with_castable: 0 };
++const counts: Record<string, number> = { decisions: 0, attackers: 0, risky_attack: 0, blockers: 0, no_block_lethal: 0, declined_good_block: 0, aura_targets: 0, aura_on_non_hexproof: 0, casts: 0, pierce_exposed: 0, bait_before_key: 0, cast_into_open_counter: 0, cast_tapped_out: 0, pass_tapped_out_with_castable: 0 };
 +const notes: string[] = [];
 +for (const d of jl("decisions.jsonl")) {
 +  if (d.seat !== seat || d.phase !== "game" || !d.valid || d.forfeit) continue;
@@ -2256,6 +2431,8 @@ index 0000000..f3fb908
 +    const pierce = /can pay now: [^\n]*Spell Pierce ×/.test(open); const counter = /can pay now: [^\n]*Counterspell ×/.test(open);
 +    if (cast) {
 +      counts.casts++;
++      const plan = castingPlan(req, db, plans);
++      if (plan?.drop.some((d) => d.id === cast.id)) { counts.bait_before_key++; notes.push(`${tag} ${plan.drop.find((d) => d.id === cast.id)!.name}: ${plan.drop.find((d) => d.id === cast.id)!.reason}`); }
 +      const name = cast.label.replace(/^cast spell: your /, "").replace(/ \[Hand\].*$/, "").replace(/ \(.*$/, "");
 +      const c = getCard(db, name);
 +      if (tappedOut) counts.cast_tapped_out++;
@@ -2498,32 +2675,41 @@ index 0000000..a8f6c33
 +}
 diff --git a/src/knowledge/policy-replay.ts b/src/knowledge/policy-replay.ts
 new file mode 100644
-index 0000000..c662eda
+index 0000000..bdb0776
 --- /dev/null
 +++ b/src/knowledge/policy-replay.ts
-@@ -0,0 +1,22 @@
-+/** Pilot patch: replay suicidalAttackers over recorded attackers prompts. tsx src/knowledge/policy-replay.ts <rendered-prompts.jsonl> [--seat glm] [--max N] */
+@@ -0,0 +1,31 @@
++/** Pilot patch: replay the binding policies over recorded prompts: suicidal attackers, lethal blocks, casting-order drops.
++ *  tsx src/knowledge/policy-replay.ts <rendered-prompts.jsonl> <plans.yaml> [--seat glm] [--kind attackers|blockers|priority] [--max N] */
 +import fs from "node:fs";
 +import YAML from "yaml";
 +import { loadDb } from "../cards/db.ts";
 +import type { DecisionOption, DecisionRequest } from "../types.ts";
-+import { suicidalAttackers } from "./combat.ts";
++import { lethalBlocks, suicidalAttackers } from "./combat.ts";
++import { castingPlan } from "./interaction.ts";
 +const args = process.argv.slice(2); const flags: Record<string, string> = {}; const pos: string[] = [];
 +for (let i = 0; i < args.length; i++) { if (args[i].startsWith("--")) { flags[args[i].slice(2)] = args[i + 1]; i++; } else pos.push(args[i]); }
-+const db = loadDb(); let shown = 0, total = 0;
-+for (const line of fs.readFileSync(pos[0], "utf8").split("\n")) {
++const [file, plans] = pos; const max = Number(flags.max ?? 20);
++const db = loadDb(); let shown = 0; const totals: Record<string, number> = {};
++for (const line of fs.readFileSync(file, "utf8").split("\n")) {
 +  if (!line.trim()) continue;
-+  const rec = JSON.parse(line); if (rec.kind !== "attackers" || (flags.seat && rec.seat !== flags.seat)) continue;
++  const rec = JSON.parse(line);
++  if (flags.seat && rec.seat !== flags.seat) continue;
++  if (flags.kind && rec.kind !== flags.kind) continue;
++  if (!["attackers", "blockers", "priority"].includes(rec.kind)) continue;
 +  const p = rec.prompt; const s = p.indexOf("## State\n"); const o = p.indexOf("\n## Options\n", s); if (s < 0 || o < 0) continue;
 +  const m = p.indexOf("\n## ", s + 9); const state = YAML.parse(p.slice(s + 9, m >= 0 && m < o ? m : o).trim());
 +  const rest = p.slice(o + 12); const optText = rest.slice(0, rest.indexOf("\n\nChoose") < 0 ? undefined : rest.indexOf("\n\nChoose"));
 +  const options: DecisionOption[] = []; for (const l of optText.split("\n")) { const mm = l.match(/^- \[([^\]]+)\] (.*)$/); if (mm) options.push({ id: mm[1], label: mm[2] }); }
-+  const req: DecisionRequest = { requestId: rec.requestId, phase: "game", kind: "attackers", prompt: "", state, options, min: 0, max: 9 };
-+  total++;
-+  const d = suicidalAttackers(req, db);
-+  if (d.length) { console.log(`${rec.requestId} t${state.turn}: ${d.map((x) => `${x.name} (${x.auras} auras) dies to ${x.blocker}`).join("; ")}`); if (++shown >= Number(flags.max ?? 20)) break; }
++  const req: DecisionRequest = { requestId: rec.requestId, phase: "game", kind: rec.kind, prompt: "", state, options, min: 0, max: 9 };
++  totals[rec.kind] = (totals[rec.kind] ?? 0) + 1;
++  let out = "";
++  if (rec.kind === "attackers") { const d = suicidalAttackers(req, db); if (d.length) out = `suicidal: ${d.map((x) => `${x.name} (${x.auras} auras) dies to ${x.blocker}`).join("; ")}`; }
++  if (rec.kind === "blockers") { const lb = lethalBlocks(req, db); if (lb) out = `lethal blocks → ${lb.why}`; }
++  if (rec.kind === "priority") { const c = castingPlan(req, db, plans); if (c?.drop.length) out = `sequence drops: ${c.drop.map((d) => `${d.name} (${d.reason})`).join("; ")}\n      ${c.text.join("\n      ")}`; else if (c && flags.verbose) out = `plan: ${c.text.join(" | ")}`; }
++  if (out) { console.log(`${rec.seat} ${rec.requestId} t${state.turn} [${rec.kind}]: ${out}`); if (++shown >= max) break; }
 +}
-+console.log(`attackers prompts: ${total}, with a suicidal option: ${shown}`);
++console.log(`prompts: ${JSON.stringify(totals)}, shown ${shown}`);
 diff --git a/src/knowledge/sections-replay.ts b/src/knowledge/sections-replay.ts
 new file mode 100644
 index 0000000..24d5e33

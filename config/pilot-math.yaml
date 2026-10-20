@@ -21,6 +21,7 @@ event:
   openMana: true            # parche piloto (19/10): sección "Their open mana" (maná abierto del rival, respuestas instantáneas que le quedan en su lista, maná que te queda tras cada carta)
   auraPolicy: strict        # parche piloto (19/10): un aura tuya nunca apunta a un token ni a una criatura sin hexproof si hay una con hexproof
   combatPolicy: strict      # parche piloto (19/10): una criatura con auras y sin first strike no ataca contra un bloqueador con deathtouch destapado salvo letal
+  sequencePolicy: strict    # parche piloto (20/10): cantrips/ramp no se ofrecen antes del hechizo clave si lo dejarían sin maná para pagar un Spell Pierce vivo
   plansFile: /Users/jorge/dev/mtg-rival-pilot/knowledge/plans.yaml   # parche piloto (15/10): sección "Game plan" por cruce, rival inferido de lo visible
   playDrawAlternate: false  # true = el match impar sale el seat 0 y el par el seat 1 (vara balanceada); bin/bench.sh --alternate lo prende
   cubeStudy: false
@@ -79,7 +80,7 @@ seats:
     label: "GLM 5.3 piloto v2 congelado (proxy LLM)"
     maxTokens: 8192
     reasoningEffort: low
-    eventOverrides: { combatMath: false, openMana: false, auraPolicy: advise, combatPolicy: advise, plansFile: /Users/jorge/dev/mtg-rival-pilot/knowledge/plans-v2.yaml }
+    eventOverrides: { combatMath: false, openMana: false, auraPolicy: advise, combatPolicy: advise, sequencePolicy: advise, plansFile: /Users/jorge/dev/mtg-rival-pilot/knowledge/plans-v2.yaml }
   - id: glm-b                # mismo piloto que glm, para partidas piloto vs piloto (el harness no acepta el mismo seat dos veces)
     provider: openai
     model: glm-5.3
