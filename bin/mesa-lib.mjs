@@ -14,7 +14,7 @@ import { fileURLToPath } from "node:url";
 export const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 export const DATA = path.join(root, "data", "mesa");
 export const RIVALES = { "red-madness": "Mono Red Madness", bogles: "Bogles", elves: "Elves", "blue-terror": "Mono Blue Terror", "grixis-control": "Grixis Control", "azorius-faeries": "Azorius Faeries" };
-export const SEATS = { glm: "el piloto (GLM 5.3 + damage math)", flash: "el piloto caro (DeepSeek Flash razonando)", "forge-ai-1": "la IA de stock de Forge" };
+export const SEATS = { glm: "el piloto (GLM + capa experta)", flash: "el piloto caro (DeepSeek Flash)", "forge-ai-1": "la IA de stock de Forge" };
 
 // --- cartas -------------------------------------------------------------------------------------------------------
 const db = JSON.parse(fs.readFileSync(path.join(root, "vendor/mtg-bench/data/cards.json"), "utf8"));
@@ -35,7 +35,8 @@ export function parseList(text) {
     if (/^(deck|main|maindeck|mainboard|commander)\b:?$/i.test(line)) continue;
     if (/^\/\//.test(line) || /^#/.test(line)) continue;
     if (side) continue;
-    const m = line.match(/^(\d+)\s*[xX]?\s+(.+?)(?:\s+\([A-Za-z0-9]{2,6}\)\s*\d*[a-z]?)?(?:\s+\*F\*)?$/);
+    const m = line.match(/^(\d+)\s*[xX]?\s+(.+?)(?:\s+\([A-Za-z0-9]{2,6}\)\s*\d*[a-z]?)?(?:\s+\*F\*)?$/)
+      ?? (byName.has(strip(line)) ? [line, "1", line] : null);   // una línea sin cantidad es una copia
     if (!m) { unknown.push(line); continue; }
     const n = Number(m[1]);
     const name = m[2].replace(/\s+\/\s+/, " // ").trim();

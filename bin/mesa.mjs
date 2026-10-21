@@ -38,7 +38,7 @@ let lastResult = null;
 function startGame({ user, player, deck, rival, seat, modo = "humano" }) {
   const runId = `mesa-${modo === "bot" ? "bot-" : ""}${user}-${slugify(deck.nombre, "mazo").slice(0, 20)}-${new Date().toISOString().replace(/[:T]/g, "-").slice(0, 19)}`;
   const script = modo === "bot" ? "bin/bot-game.sh" : "bin/human-game.sh";
-  const child = spawn(path.join(root, script), [deckFile(user, deck.slug), path.join(root, "decks", `pauper-${rival}.dck`), runId, seat], { cwd: root, env: process.env, stdio: ["ignore", "pipe", "pipe"] });
+  const child = spawn(path.join(root, script), [deckFile(user, deck.slug), path.join(root, "decks", `pauper-${rival}.dck`), runId, seat], { cwd: root, env: process.env, stdio: ["ignore", "pipe", "pipe"], detached: true });
   const g = { child, port: null, token: null, user, player, deck: deck.nombre, rival, seat, modo, runId, startedAt: Date.now(), result: null, log: [] };
   const onLine = (line) => {
     g.log.push(line); if (g.log.length > 200) g.log.shift();
@@ -59,8 +59,11 @@ function startGame({ user, player, deck, rival, seat, modo = "humano" }) {
 function stopGame() {
   if (!game) return;
   const g = game; game = null;
-  try { g.child.kill("SIGTERM"); } catch {}
-  setTimeout(() => { try { g.child.kill("SIGKILL"); } catch {} }, 3000);
+  // El script hace exec de bench.sh → npm → tsx → node → java: matar sólo al hijo directo dejaba vivos el harness y el
+  // bridge (y el puerto 8790 ocupado para la próxima partida). Con detached, el hijo es líder de grupo: se mata el grupo.
+  const kill = (sig) => { try { process.kill(-g.child.pid, sig); } catch { try { g.child.kill(sig); } catch {} } };
+  kill("SIGTERM");
+  setTimeout(() => kill("SIGKILL"), 3000);
   // el bridge Java queda huérfano si node muere sin cerrar el match: lo buscamos por run-id
   spawn("pkill", ["-f", `AgentBridge.*${g.runId}`]);
 }
@@ -193,7 +196,7 @@ $('clave').addEventListener('keydown',e=>{if(e.key==='Enter')go('/login',{})});$
 
 function lobbyPage(user) {
   const nombre = getUser(user)?.nombre ?? user;
-  const rivales = Object.entries(RIVALES).map(([k, v]) => `<option value="${k}">${v}</option>`).join("");
+  const rivales = Object.entries(RIVALES).map(([k, v]) => `<option value="${k}"${k === "bogles" ? " selected" : ""}>${v}</option>`).join("");   // el bot juega Bogles por defecto (el mazo elegido para la partida)
   const seats = Object.entries(SEATS).map(([k, v]) => `<option value="${k}">${v}</option>`).join("");
   return `${HEAD("mtg-rival · lobby")}
 <header><h1>mtg-rival · mesa</h1><div class="dim">${esc(nombre)} <button class="sec small" id="salir">salir</button></div></header>
@@ -224,10 +227,11 @@ function lobbyPage(user) {
 <div class="panel dim"><b>Cómo se juega.</b> La mesa te muestra cada decisión con botones; la carta que corresponde a una opción se resalta y se puede clickear. Enter confirma o pasa. El sistema te pregunta sólo cuando hay algo que decidir: si no tenés jugadas, los turnos pasan solos. Los nombres de las cartas son los de Forge (inglés). Una partida por vez en la mesa.</div>
 <script>${JS_COMMON}
 let mazos=[],editando=null,fecha=(s)=>new Date(s).toLocaleDateString('es-AR',{day:'2-digit',month:'2-digit'});
-async function estado(){const e=await api('/estado');const el=$('estado');
- if(e.enCurso){const api=e.mia&&e.url&&e.modo==='bot'?'<div style="margin-top:8px"><b>Modo bot.</b> Conectá tu programa a esta URL (lleva tu token, no la compartas):<pre>'+esc(location.origin+e.url)+'</pre>Stream: <code>GET /events?t=…</code> · respuesta: <code>POST /answer?t=…</code> · pendiente: <code>GET /pending?t=…</code> · <a href="/api-bot" target="_blank">documentación</a> · <a href="/bot-client.py" target="_blank">cliente de ejemplo (Python)</a> · servidor MCP para agentes: <code>'+esc(location.origin)+'/mcp</code>: <code>python3 bot-client.py "'+esc(location.origin+e.url)+'"</code><br>También podés <a href="'+e.url+'">mirar la mesa</a> (si clickeás ahí, contestás vos por tu bot).</div>':'';
-  el.innerHTML='<b>Partida en curso:</b> '+esc(e.jugador)+' con '+esc(e.mazo)+' vs '+esc(e.contra)+' con '+esc(e.rival)+(e.modo==='bot'?' (bot por la API)':'')+(e.mia?(e.url?(e.modo==='bot'?'':' — <a href="'+e.url+'">entrar a la mesa</a>'):' (arrancando…)')+' <button class="sec small" id="abandonar">abandonar</button>':' (mesa ocupada, esperá que termine)')+api;$('jugarPanel').style.display='none';
-  const b=$('abandonar');if(b)b.onclick=async()=>{if(b.dataset.ok){await api('/abandonar',{});estado();}else{b.dataset.ok=1;b.textContent='¿seguro? tocá de nuevo';}};}
+let abandonArmed=0,lastEstado='';   // el 2do toque de "abandonar" tiene que sobrevivir al refresco de estado cada 5 s
+async function estado(){const e=await api('/estado');const el=$('estado');const key=JSON.stringify(e);if(key===lastEstado)return;lastEstado=key;
+ if(e.enCurso){const apiHtml=e.mia&&e.url&&e.modo==='bot'?'<div style="margin-top:8px"><b>Modo bot.</b> Conectá tu programa a esta URL (lleva tu token, no la compartas):<pre>'+esc(location.origin+e.url)+'</pre>Stream: <code>GET /events?t=…</code> · respuesta: <code>POST /answer?t=…</code> · pendiente: <code>GET /pending?t=…</code> · <a href="/api-bot" target="_blank">documentación</a> · <a href="/bot-client.py" target="_blank">cliente de ejemplo (Python)</a> · servidor MCP para agentes: <code>'+esc(location.origin)+'/mcp</code>: <code>python3 bot-client.py "'+esc(location.origin+e.url)+'"</code><br>También podés <a href="'+e.url+'">mirar la mesa</a> (si clickeás ahí, contestás vos por tu bot).</div>':'';
+  el.innerHTML='<b>Partida en curso:</b> '+esc(e.jugador)+' con '+esc(e.mazo)+' vs '+esc(e.contra)+' con '+esc(e.rival)+(e.modo==='bot'?' (bot por la API)':'')+(e.mia?(e.url?(e.modo==='bot'?'':' — <a href="'+e.url+'">entrar a la mesa</a>'):' (arrancando…)')+' <button class="sec small" id="abandonar">abandonar</button>':' (mesa ocupada, esperá que termine)')+apiHtml;$('jugarPanel').style.display='none';
+  const b=$('abandonar');if(b){if(Date.now()-abandonArmed<10000){b.dataset.ok=1;b.textContent='¿seguro? tocá de nuevo';}b.onclick=async()=>{if(b.dataset.ok){abandonArmed=0;lastEstado='';b.disabled=true;b.textContent='abandonando…';await api('/abandonar',{});estado();}else{abandonArmed=Date.now();b.dataset.ok=1;b.textContent='¿seguro? tocá de nuevo';}};}}
  else{el.innerHTML=e.ultimo?'<b>Última partida:</b> '+esc(e.ultimo.jugador)+' con '+esc(e.ultimo.mazo)+' vs '+esc(e.ultimo.contra)+' con '+esc(e.ultimo.rival)+' → '+esc(e.ultimo.resultado||'sin resultado'):'No hay partida en curso. Mesa libre.';$('jugarPanel').style.display='';}}
 async function cargar(sel){mazos=await api('/mazos');if(!Array.isArray(mazos))mazos=[];
  $('mazos').innerHTML=mazos.length?mazos.map(m=>'<div class="mazo"><div class="n"><b>'+esc(m.nombre)+'</b> <span class="dim">'+m.total+' cartas · '+fecha(m.actualizado)+'</span></div><button class="sec small" onclick="editar(\\''+m.slug+'\\')">editar</button><button class="sec small" onclick="borrar(\\''+m.slug+'\\',this)">borrar</button></div>').join(''):'<div class="dim">Todavía no guardaste ningún mazo. Pegá tu lista con "Nuevo mazo".</div>';
@@ -236,7 +240,7 @@ function abrirEditor(nombre,lista,slug){editando=slug||null;$('nombre').value=no
 $('nuevo').onclick=()=>abrirEditor('','',null);$('cancelar').onclick=()=>{$('editor').style.display='none';$('nuevo').style.display='';};
 async function editar(slug){const d=await api('/mazos/'+slug);if(d.slug)abrirEditor(d.nombre,d.lista,d.slug);}
 async function borrar(slug,b){if(!b.dataset.ok){b.dataset.ok=1;b.textContent='¿seguro?';return;}await api('/mazos/'+slug,null,'DELETE');cargar();}
-function mostrar(p){let h='<div>'+p.total+' cartas reconocidas.</div>';if(p.unknown&&p.unknown.length)h+='<div class="bad">No reconozco: <ul>'+p.unknown.map(u=>'<li>'+esc(u)+'</li>').join('')+'</ul></div>';if(p.warnings&&p.warnings.length)h+='<div class="bad"><ul>'+p.warnings.map(w=>'<li>'+esc(w)+'</li>').join('')+'</ul></div>';if(p.ok)h+='<div class="ok">Lista OK ✓</div>';$('res').innerHTML=h;}
+function mostrar(p){let h='<div>'+p.total+' cartas reconocidas.</div>';if(p.unknown&&p.unknown.length)h+='<div class="bad">No reconozco: <ul>'+p.unknown.map(u=>'<li>'+esc(u)+'</li>').join('')+'</ul></div>';if(p.warnings&&p.warnings.length)h+='<div class="bad">Atención: <ul>'+p.warnings.map(w=>'<li>'+esc(w)+'</li>').join('')+'</ul></div>';if(p.ok)h+='<div class="ok">Lista OK ✓</div>';$('res').innerHTML=h;}
 $('validar').onclick=async()=>mostrar(await api('/validar',{lista:$('lista').value}));
 $('guardar').onclick=async()=>{const p=await api('/mazos',{nombre:$('nombre').value,lista:$('lista').value,slug:editando});if(p.slug){$('editor').style.display='none';$('nuevo').style.display='';cargar(p.slug);return;}if(p.unknown)mostrar(p);$('res').innerHTML='<div class="bad">'+esc(p.error||'error')+'</div>'+$('res').innerHTML;};
 $('jugar').onclick=async()=>{$('jugar').disabled=true;$('resJugar').innerHTML='Arrancando la partida (Forge tarda unos segundos)…';
