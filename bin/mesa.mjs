@@ -8,11 +8,12 @@
  *   GET  /yo                   quién soy
  *   GET  /mazos  POST /mazos   lista / crea o actualiza ({nombre, lista, slug?})   GET|DELETE /mazos/<slug>
  *   POST /validar              {lista} -> cartas reconocidas / desconocidas (contra la base de Forge)
- *   POST /jugar                {mazo, rival, seat, modo?: humano|bot} -> lanza bin/human-game.sh (o bin/bot-game.sh) con el .dck guardado y devuelve el link
+ *   POST /jugar                {mazo, rival, seat, modo?: humano|bot, vista?: true} -> lanza bin/human-game.sh (o bin/bot-game.sh) con el .dck guardado y devuelve el link
+ *                              vista: modo análisis, la mesa le muestra a la persona la mano del rival (sólo modo humano y contra un piloto)
  *   GET  /api-bot /bot-client.py  doc y cliente de ejemplo para un bot externo (docs/API-BOT.md, examples/bot-client.py)
  *   POST/GET/DELETE /mcp       servidor MCP (Streamable HTTP) con las mismas acciones como tools: bin/mesa-mcp.mjs
  *   POST /abandonar            corta la partida (sólo quien la empezó)     GET /estado
- *   /events /answer /pending /img y /?t= se proxyan a la mesa (src/human/server.ts) mientras hay partida
+ *   /events /poll /answer /pending /img y /?t= se proxyan a la mesa (src/human/server.ts) mientras hay partida
  * Una partida por vez. Puerto 8787 (MESA_PORT). Código de invitación MESA_INVITE (si falta, se genera y se imprime).
  */
 import crypto from "node:crypto";
@@ -34,12 +35,17 @@ const COOKIE = "mesa";
 // --- partida en curso ------------------------------------------------------------------------------------------------
 let game = null; // { child, port, token, user, player, deck, rival, seat, runId, startedAt, result, log: [] }
 let lastResult = null;
+// Modo análisis ("vista"): la mesa le muestra a la persona la mano del rival, tal como la tenía en su última decisión.
+// La IA de stock decide dentro de Forge, sin pasar por el harness: de ella no hay mano que mostrar.
+const SIN_VISTA = new Set(["forge-ai-1"]);
 
-function startGame({ user, player, deck, rival, seat, modo = "humano" }) {
-  const runId = `mesa-${modo === "bot" ? "bot-" : ""}${user}-${slugify(deck.nombre, "mazo").slice(0, 20)}-${new Date().toISOString().replace(/[:T]/g, "-").slice(0, 19)}`;
+function startGame({ user, player, deck, rival, seat, modo = "humano", vista = false }) {
+  const runId = `mesa-${modo === "bot" ? "bot-" : ""}${user}-${slugify(deck.nombre, "mazo").slice(0, 20)}-${new Date().toISOString().replace(/[:T]/g, "-").slice(0, 19)}${vista ? "-vista" : ""}`;
   const script = modo === "bot" ? "bin/bot-game.sh" : "bin/human-game.sh";
-  const child = spawn(path.join(root, script), [deckFile(user, deck.slug), path.join(root, "decks", `pauper-${rival}.dck`), runId, seat], { cwd: root, env: process.env, stdio: ["ignore", "pipe", "pipe"], detached: true });
-  const g = { child, port: null, token: null, user, player, deck: deck.nombre, rival, seat, modo, runId, startedAt: Date.now(), result: null, log: [] };
+  // La vista viaja por entorno hasta el harness (src/agents/human.ts) y sólo si se pidió para esta partida: nunca heredada de quien lanzó el lobby.
+  const env = { ...process.env }; delete env.MTG_HUMAN_PEEK; if (vista) env.MTG_HUMAN_PEEK = "1";
+  const child = spawn(path.join(root, script), [deckFile(user, deck.slug), path.join(root, "decks", `pauper-${rival}.dck`), runId, seat], { cwd: root, env, stdio: ["ignore", "pipe", "pipe"], detached: true });
+  const g = { child, port: null, token: null, user, player, deck: deck.nombre, rival, seat, modo, vista, runId, startedAt: Date.now(), result: null, log: [] };
   const onLine = (line) => {
     g.log.push(line); if (g.log.length > 200) g.log.shift();
     const m = line.match(/open http:\/\/localhost:(\d+)\/\?t=([A-Za-z0-9_-]+)/);
@@ -52,7 +58,7 @@ function startGame({ user, player, deck, rival, seat, modo = "humano" }) {
   child.stdout.on("data", feed); child.stderr.on("data", feed);
   child.on("exit", (code) => { lastResult = { ...g, exitCode: code, child: undefined }; if (game === g) game = null; console.log(`[mesa] partida ${runId} terminó (exit ${code}): ${g.result ?? "sin resultado"}`); });
   game = g;
-  console.log(`[mesa] partida ${runId}: ${player} (${deck.nombre}) vs ${seat} con ${rival}`);
+  console.log(`[mesa] partida ${runId}: ${player} (${deck.nombre}) vs ${seat} con ${rival}${vista ? " · modo análisis (mano del rival a la vista)" : ""}`);
   return g;
 }
 
@@ -69,7 +75,7 @@ function stopGame() {
 }
 
 // --- http ---------------------------------------------------------------------------------------------------------------
-const PROXIED = new Set(["/events", "/answer", "/img", "/pending"]);
+const PROXIED = new Set(["/events", "/poll", "/answer", "/img", "/pending"]);
 const DOCS = { "/api-bot": ["docs/API-BOT.md", "text/markdown; charset=utf-8"], "/bot-client.py": ["examples/bot-client.py", "text/plain; charset=utf-8"] };
 const mcp = createMcp({ get game() { return game; }, startGame, stopGame, estado, checkInvite: (c) => sameCode(String(c ?? "").trim(), INVITE) });
 const server = http.createServer(async (req, res) => {
@@ -119,10 +125,11 @@ const server = http.createServer(async (req, res) => {
       const deck = getDeck(user, String(b.mazo ?? ""));
       if (!deck) return json(res, { error: "elegí uno de tus mazos guardados" }, 400);
       const modo = b.modo === "bot" ? "bot" : "humano";
-      const g = startGame({ user, player: getUser(user)?.nombre ?? user, deck, rival: b.rival, seat: b.seat, modo });
+      const vista = b.vista === true && modo === "humano" && !SIN_VISTA.has(b.seat);
+      const g = startGame({ user, player: getUser(user)?.nombre ?? user, deck, rival: b.rival, seat: b.seat, modo, vista });
       for (let i = 0; i < 120 && !g.token && game === g; i++) await sleep(500);
       if (!g.token) { const log = g.log.slice(-15).join("\n"); stopGame(); return json(res, { error: "la partida no arrancó", log }, 500); }
-      return json(res, { url: `/?t=${g.token}`, runId: g.runId, modo });
+      return json(res, { url: `/?t=${g.token}`, runId: g.runId, modo, vista });
     }
     if (p === "/abandonar" && m === "POST") {
       if (game && game.user !== user) return json(res, { error: `la partida es de ${game.player}` }, 403);
@@ -136,13 +143,14 @@ function proxy(req, res, port) {
   const pr = http.request({ host: "127.0.0.1", port, path: req.url, method: req.method, headers: { ...req.headers, host: `127.0.0.1:${port}` } }, (r) => {
     res.writeHead(r.statusCode ?? 502, r.headers); r.pipe(res);
   });
-  pr.on("error", () => { res.statusCode = 502; res.end("la mesa no responde (¿terminó la partida?)"); });
+  pr.on("error", () => { if (res.headersSent) return res.end(); res.statusCode = 502; res.end("la mesa no responde (¿terminó la partida?)"); });
+  res.on("close", () => pr.destroy());   // el navegador se fue (recarga, stream o long poll abierto): soltar el pedido a la mesa
   req.pipe(pr);
 }
 function estado(user) {
   return game
-    ? { enCurso: true, jugador: game.player, mazo: game.deck, rival: RIVALES[game.rival], contra: SEATS[game.seat], modo: game.modo, desde: game.startedAt, mia: game.user === user, url: game.user === user && game.token ? `/?t=${game.token}` : null }
-    : { enCurso: false, ultimo: lastResult ? { jugador: lastResult.player, mazo: lastResult.deck, rival: RIVALES[lastResult.rival], contra: SEATS[lastResult.seat], resultado: lastResult.result, runId: lastResult.runId } : null };
+    ? { enCurso: true, jugador: game.player, mazo: game.deck, rival: RIVALES[game.rival], contra: SEATS[game.seat], modo: game.modo, vista: !!game.vista, desde: game.startedAt, mia: game.user === user, url: game.user === user && game.token ? `/?t=${game.token}` : null }
+    : { enCurso: false, ultimo: lastResult ? { jugador: lastResult.player, mazo: lastResult.deck, rival: RIVALES[lastResult.rival], contra: SEATS[lastResult.seat], vista: !!lastResult.vista, resultado: lastResult.result, runId: lastResult.runId } : null };
 }
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const sameCode = (a, b) => a.length === b.length && crypto.timingSafeEqual(Buffer.from(a), Buffer.from(b));
@@ -205,7 +213,8 @@ function lobbyPage(user) {
 <div class="panel" id="jugarPanel">
   <h2>Jugar</h2>
   <div class="row3"><div><label>Tu mazo</label><select id="mazo"></select></div><div><label>El rival juega con</label><select id="rival">${rivales}</select></div><div><label>Contra</label><select id="seat">${seats}</select></div></div>
-  <label>Quién juega</label><select id="modo"><option value="humano">vos, desde la mesa web</option><option value="bot">tu bot, por la API (<a href="/api-bot" target="_blank">doc</a>)</option></select>
+  <div class="row"><div><label>Quién juega</label><select id="modo"><option value="humano">vos, desde la mesa web</option><option value="bot">tu bot, por la API (<a href="/api-bot" target="_blank">doc</a>)</option></select></div><div><label>Mano del bot</label><select id="vista"><option value="">oculta (partida normal)</option><option value="1">a la vista (modo análisis)</option></select></div></div>
+  <div id="vistaNota" class="dim" style="margin-top:8px;font-size:13px"></div>
   <button id="jugar" disabled>Jugar</button>
   <div id="resJugar" style="margin-top:10px"></div>
 </div>
@@ -230,9 +239,9 @@ let mazos=[],editando=null,fecha=(s)=>new Date(s).toLocaleDateString('es-AR',{da
 let abandonArmed=0,lastEstado='';   // el 2do toque de "abandonar" tiene que sobrevivir al refresco de estado cada 5 s
 async function estado(){const e=await api('/estado');const el=$('estado');const key=JSON.stringify(e);if(key===lastEstado)return;lastEstado=key;
  if(e.enCurso){const apiHtml=e.mia&&e.url&&e.modo==='bot'?'<div style="margin-top:8px"><b>Modo bot.</b> Conectá tu programa a esta URL (lleva tu token, no la compartas):<pre>'+esc(location.origin+e.url)+'</pre>Stream: <code>GET /events?t=…</code> · respuesta: <code>POST /answer?t=…</code> · pendiente: <code>GET /pending?t=…</code> · <a href="/api-bot" target="_blank">documentación</a> · <a href="/bot-client.py" target="_blank">cliente de ejemplo (Python)</a> · servidor MCP para agentes: <code>'+esc(location.origin)+'/mcp</code>: <code>python3 bot-client.py "'+esc(location.origin+e.url)+'"</code><br>También podés <a href="'+e.url+'">mirar la mesa</a> (si clickeás ahí, contestás vos por tu bot).</div>':'';
-  el.innerHTML='<b>Partida en curso:</b> '+esc(e.jugador)+' con '+esc(e.mazo)+' vs '+esc(e.contra)+' con '+esc(e.rival)+(e.modo==='bot'?' (bot por la API)':'')+(e.mia?(e.url?(e.modo==='bot'?'':' — <a href="'+e.url+'">entrar a la mesa</a>'):' (arrancando…)')+' <button class="sec small" id="abandonar">abandonar</button>':' (mesa ocupada, esperá que termine)')+apiHtml;$('jugarPanel').style.display='none';
+  el.innerHTML='<b>Partida en curso:</b> '+esc(e.jugador)+' con '+esc(e.mazo)+' vs '+esc(e.contra)+' con '+esc(e.rival)+(e.modo==='bot'?' (bot por la API)':'')+(e.vista?' (modo análisis: mano del bot a la vista)':'')+(e.mia?(e.url?(e.modo==='bot'?'':' — <a href="'+e.url+'">entrar a la mesa</a>'):' (arrancando…)')+' <button class="sec small" id="abandonar">abandonar</button>':' (mesa ocupada, esperá que termine)')+apiHtml;$('jugarPanel').style.display='none';
   const b=$('abandonar');if(b){if(Date.now()-abandonArmed<10000){b.dataset.ok=1;b.textContent='¿seguro? tocá de nuevo';}b.onclick=async()=>{if(b.dataset.ok){abandonArmed=0;lastEstado='';b.disabled=true;b.textContent='abandonando…';await api('/abandonar',{});estado();}else{abandonArmed=Date.now();b.dataset.ok=1;b.textContent='¿seguro? tocá de nuevo';}};}}
- else{el.innerHTML=e.ultimo?'<b>Última partida:</b> '+esc(e.ultimo.jugador)+' con '+esc(e.ultimo.mazo)+' vs '+esc(e.ultimo.contra)+' con '+esc(e.ultimo.rival)+' → '+esc(e.ultimo.resultado||'sin resultado'):'No hay partida en curso. Mesa libre.';$('jugarPanel').style.display='';}}
+ else{el.innerHTML=e.ultimo?'<b>Última partida:</b> '+esc(e.ultimo.jugador)+' con '+esc(e.ultimo.mazo)+' vs '+esc(e.ultimo.contra)+' con '+esc(e.ultimo.rival)+(e.ultimo.vista?' (modo análisis)':'')+' → '+esc(e.ultimo.resultado||'sin resultado'):'No hay partida en curso. Mesa libre.';$('jugarPanel').style.display='';}}
 async function cargar(sel){mazos=await api('/mazos');if(!Array.isArray(mazos))mazos=[];
  $('mazos').innerHTML=mazos.length?mazos.map(m=>'<div class="mazo"><div class="n"><b>'+esc(m.nombre)+'</b> <span class="dim">'+m.total+' cartas · '+fecha(m.actualizado)+'</span></div><button class="sec small" onclick="editar(\\''+m.slug+'\\')">editar</button><button class="sec small" onclick="borrar(\\''+m.slug+'\\',this)">borrar</button></div>').join(''):'<div class="dim">Todavía no guardaste ningún mazo. Pegá tu lista con "Nuevo mazo".</div>';
  $('mazo').innerHTML=mazos.map(m=>'<option value="'+m.slug+'">'+esc(m.nombre)+' ('+m.total+')</option>').join('');if(sel)$('mazo').value=sel;$('jugar').disabled=!mazos.length;}
@@ -244,16 +253,21 @@ function mostrar(p){let h='<div>'+p.total+' cartas reconocidas.</div>';if(p.unkn
 $('validar').onclick=async()=>mostrar(await api('/validar',{lista:$('lista').value}));
 $('guardar').onclick=async()=>{const p=await api('/mazos',{nombre:$('nombre').value,lista:$('lista').value,slug:editando});if(p.slug){$('editor').style.display='none';$('nuevo').style.display='';cargar(p.slug);return;}if(p.unknown)mostrar(p);$('res').innerHTML='<div class="bad">'+esc(p.error||'error')+'</div>'+$('res').innerHTML;};
 $('jugar').onclick=async()=>{$('jugar').disabled=true;$('resJugar').innerHTML='Arrancando la partida (Forge tarda unos segundos)…';
- const p=await api('/jugar',{mazo:$('mazo').value,rival:$('rival').value,seat:$('seat').value,modo:$('modo').value});
+ const p=await api('/jugar',{mazo:$('mazo').value,rival:$('rival').value,seat:$('seat').value,modo:$('modo').value,vista:$('vista').value==='1'});
  if(p.url){if(p.modo==='bot'){$('resJugar').innerHTML='';estado();return;}location.href=p.url;return;}$('resJugar').innerHTML='<div class="bad">'+esc(p.error||'error')+(p.log?'<pre>'+esc(p.log)+'</pre>':'')+'</div>';$('jugar').disabled=false;};
 $('salir').onclick=async()=>{await api('/logout',{});location.href='/';};
+// modo análisis: sólo cuando juega la persona y el rival es un piloto (lo que decide la IA de stock no pasa por la mesa)
+const SIN_VISTA=${JSON.stringify([...SIN_VISTA])};
+function vistaUi(){const bot=$('modo').value==='bot',sin=SIN_VISTA.includes($('seat').value),v=$('vista');v.disabled=bot||sin;if(v.disabled)v.value='';
+ $('vistaNota').textContent=bot?'Con tu bot por la API no hay vista de la mano.':sin?'Contra la IA de stock de Forge no se puede ver la mano: decide dentro de Forge, sin pasar por la mesa.':v.value?'Modo análisis: arriba de la mesa ves la mano del bot tal como la tenía en su última decisión (si después robó o descartó, se actualiza cuando vuelve a decidir). El bot no se entera y juega igual que siempre. Sirve para revisar sus jugadas, no para medir cuánto le ganás.':'';}
+for(const i of ['modo','seat','vista'])$(i).onchange=vistaUi;vistaUi();
 estado();cargar();setInterval(estado,5000);
 </script></main></body></html>`;
 }
 
 server.listen(PORT, () => {
   console.log(`[mesa] lobby en http://localhost:${PORT}/  · código de invitación (para crear cuenta): ${INVITE}`);
-  console.log(`[mesa] para alguien remoto: cloudflared tunnel --url http://localhost:${PORT}  · usuarios y mazos: bin/mesa-admin.mjs`);
+  console.log(`[mesa] para alguien remoto: cloudflared tunnel --config /dev/null --url http://localhost:${PORT}  · usuarios y mazos: bin/mesa-admin.mjs`);
 });
 process.on("SIGINT", () => { stopGame(); process.exit(0); });
 process.on("SIGTERM", () => { stopGame(); process.exit(0); });

@@ -6,6 +6,7 @@ root="$(cd "$(dirname "$0")/.." && pwd)"
 if [[ -f "$HOME/.claude/secrets/op-llm-proxy.env" ]]; then set -a; source "$HOME/.claude/secrets/op-llm-proxy.env"; set +a; fi
 export MTG_LLM_BASE_URL="${MTG_LLM_BASE_URL:-${OP_LLM_PROXY_URL:-}}"   # los yaml referencian ${MTG_LLM_BASE_URL}
 if [[ "${1:-}" == "--tunnel" ]]; then
-  cloudflared tunnel --url "http://localhost:${MESA_PORT:-8787}" 2>&1 | grep --line-buffered -o "https://[a-z0-9-]*\.trycloudflare\.com" &
+  # --config /dev/null: si hay un ~/.cloudflared/config.yml (túnel con nombre de otro servicio), el túnel rápido hereda su ingress y contesta 404
+  cloudflared tunnel --config /dev/null --url "http://localhost:${MESA_PORT:-8787}" 2>&1 | grep --line-buffered -o "https://[a-z0-9-]*\.trycloudflare\.com" &
 fi
 exec node "$root/bin/mesa.mjs"

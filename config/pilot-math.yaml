@@ -22,6 +22,9 @@ event:
   auraPolicy: strict        # parche piloto (19/10): un aura tuya nunca apunta a un token ni a una criatura sin hexproof si hay una con hexproof
   combatPolicy: strict      # parche piloto (19/10): una criatura con auras y sin first strike no ataca contra un bloqueador con deathtouch destapado salvo letal
   sequencePolicy: strict    # parche piloto (20/10): cantrips/ramp no se ofrecen antes del hechizo clave si lo dejarían sin maná para pagar un Spell Pierce vivo
+  assignPolicy: strict      # parche piloto (15/11): el reparto de daño de un atacante con trample lo contesta el harness (letal justo a cada bloqueador, el resto al jugador); el modelo le puso 8 a un chump 1/1 y 1 a un rival en 8 vidas
+  manaPolicy: strict        # parche piloto (15/11): sección "Mana colours" y los casos claros los contesta el harness (color que nombra Utopia Sprawl, básica que se busca, ciclar Ash Barrens en vez de bajarla) cuando al mazo le falta un solo color sin otra vía desde la mano
+  bottomPolicy: strict      # parche piloto (15/11): al descarte al fondo del mulligan no se le ofrecen las tierras que la mano necesita (piso 3; 2 si se queda con 5 o menos) ni la única criatura barata; con el mismo prompt el modelo fondeó un Forest de una mano de 3 tierras en 2 corridas de 4
   plansFile: /Users/jorge/dev/mtg-rival-pilot/knowledge/plans.yaml   # parche piloto (15/10): sección "Game plan" por cruce, rival inferido de lo visible
   playDrawAlternate: false  # true = el match impar sale el seat 0 y el par el seat 1 (vara balanceada); bin/bench.sh --alternate lo prende
   cubeStudy: false
@@ -41,7 +44,7 @@ event:
 engine:
   type: forge
   forgeDir: /Users/jorge/dev/mtg-rival-pilot/forge
-  bridgeJar: /Users/jorge/dev/mtg-rival-pilot/vendor/mtg-bench/bridge/build/mtg-bench-bridge-v2.jar   # bridge con --first (salir/robar forzado); el jar sin sufijo es el original
+  bridgeJar: /Users/jorge/dev/mtg-rival-pilot/vendor/mtg-bench/bridge/build/mtg-bench-bridge-v3.jar   # bridge con --first (salir/robar forzado); el jar sin sufijo es el original
   controller: human           # el path validado por mtg-bench: controlador humano de Forge manejado headless
   java: /Users/jorge/Library/Java/JavaVirtualMachines/openjdk-19.0.2/Contents/Home/bin/java   # arm64 nativo (el JDK 24 de la Mac es x86 bajo Rosetta)
   javaOpts: ["-Xmx3g"]
@@ -80,7 +83,7 @@ seats:
     label: "GLM 5.3 piloto v2 congelado (proxy LLM)"
     maxTokens: 8192
     reasoningEffort: low
-    eventOverrides: { combatMath: false, openMana: false, auraPolicy: advise, combatPolicy: advise, sequencePolicy: advise, plansFile: /Users/jorge/dev/mtg-rival-pilot/knowledge/plans-v2.yaml }
+    eventOverrides: { combatMath: false, openMana: false, auraPolicy: advise, combatPolicy: advise, sequencePolicy: advise, assignPolicy: advise, manaPolicy: null, bottomPolicy: advise, plansFile: /Users/jorge/dev/mtg-rival-pilot/knowledge/plans-v2.yaml }
   - id: glm-b                # mismo piloto que glm, para partidas piloto vs piloto (el harness no acepta el mismo seat dos veces)
     provider: openai
     model: glm-5.3
