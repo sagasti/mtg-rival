@@ -20,7 +20,7 @@ event:
   combatMath: true          # parche piloto (19/10): sección "Combat" (cada bloqueo posible y su resultado, la carrera)
   openMana: true            # parche piloto (19/10): sección "Their open mana" (maná abierto del rival, respuestas instantáneas que le quedan en su lista, maná que te queda tras cada carta)
   auraPolicy: strict        # parche piloto (19/10): un aura tuya nunca apunta a un token ni a una criatura sin hexproof si hay una con hexproof
-  combatPolicy: strict      # parche piloto (19/10): una criatura con auras y sin first strike no ataca contra un bloqueador con deathtouch destapado salvo letal
+  combatPolicy: strict      # parche piloto (19/10): una criatura con auras y sin first strike no ataca contra un bloqueador con deathtouch destapado salvo letal; desde el 16/11 se le deja al modelo si el bloqueo no la frena (arrolla ≥3 y ≥ la mitad de su fuerza, y el bloqueador muere) o si nos corren por el aire (su fuerza voladora nos mata en ≤4 turnos), y el prompt dice qué atacante no se ofreció
   sequencePolicy: strict    # parche piloto (20/10): cantrips/ramp no se ofrecen antes del hechizo clave si lo dejarían sin maná para pagar un Spell Pierce vivo
   assignPolicy: strict      # parche piloto (15/11): el reparto de daño de un atacante con trample lo contesta el harness (letal justo a cada bloqueador, el resto al jugador); el modelo le puso 8 a un chump 1/1 y 1 a un rival en 8 vidas
   manaPolicy: strict        # parche piloto (15/11): sección "Mana colours" y los casos claros los contesta el harness (color que nombra Utopia Sprawl, básica que se busca, ciclar Ash Barrens en vez de bajarla) cuando al mazo le falta un solo color sin otra vía desde la mano
@@ -44,7 +44,7 @@ event:
 engine:
   type: forge
   forgeDir: /Users/jorge/dev/mtg-rival-pilot/forge
-  bridgeJar: /Users/jorge/dev/mtg-rival-pilot/vendor/mtg-bench/bridge/build/mtg-bench-bridge-v4.jar   # bridge con --first (salir/robar forzado); el jar sin sufijo es el original
+  bridgeJar: /Users/jorge/dev/mtg-rival-pilot/vendor/mtg-bench/bridge/build/mtg-bench-bridge-v5.jar   # bridge con --first (salir/robar forzado); el jar sin sufijo es el original
   controller: human           # el path validado por mtg-bench: controlador humano de Forge manejado headless
   java: /Users/jorge/Library/Java/JavaVirtualMachines/openjdk-19.0.2/Contents/Home/bin/java   # arm64 nativo (el JDK 24 de la Mac es x86 bajo Rosetta)
   javaOpts: ["-Xmx3g"]
