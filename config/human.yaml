@@ -44,7 +44,7 @@ event:
 engine:
   type: forge
   forgeDir: /Users/jorge/dev/mtg-rival-pilot/forge
-  bridgeJar: /Users/jorge/dev/mtg-rival-pilot/vendor/mtg-bench/bridge/build/mtg-bench-bridge-v3.jar   # bridge con --first (salir/robar forzado); el jar sin sufijo es el original
+  bridgeJar: /Users/jorge/dev/mtg-rival-pilot/vendor/mtg-bench/bridge/build/mtg-bench-bridge-v4.jar   # bridge con --first (salir/robar forzado); el jar sin sufijo es el original
   controller: human           # el path validado por mtg-bench: controlador humano de Forge manejado headless
   java: /Users/jorge/Library/Java/JavaVirtualMachines/openjdk-19.0.2/Contents/Home/bin/java   # arm64 nativo (el JDK 24 de la Mac es x86 bajo Rosetta)
   javaOpts: ["-Xmx3g"]
@@ -98,3 +98,4 @@ seats:
     provider: human               # parche pilot: una persona juega desde el navegador (src/human/ui.html)
     label: "Humano (web)"
     webPort: 8790                 # la mesa de la partida; el lobby público (bin/mesa.sh, puerto 8787) la proxya
+    lenient: true                 # parche piloto (16/11): también se le ofrecen, marcadas como dudosas, las cartas que el bridge estima que no puede pagar o que no tienen objetivo, y se frena aunque sólo haya de esas; la estimación a veces se equivoca y el reporte cuenta cuántas veces igual jugó
